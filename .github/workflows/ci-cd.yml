@@ -10,6 +10,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # An identifier, not a credential -- it is already in docs/CLOUDFLARE.md.
+  # Keeping it here means CLOUDFLARE_API_TOKEN is the only secret to set up.
+  CLOUDFLARE_ACCOUNT_ID: 5ea902cfe05440351866b1a0f0535407
+
 concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: true
@@ -189,13 +194,12 @@ jobs:
         shell: bash
         env:
           TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          if [ -n "$TOKEN" ] && [ -n "$ACCOUNT" ]; then
+          if [ -n "$TOKEN" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::CLOUDFLARE_API_TOKEN and/or CLOUDFLARE_ACCOUNT_ID are not set; skipping deploy. See docs/CLOUDFLARE.md."
+            echo "::warning::CLOUDFLARE_API_TOKEN is not set; skipping deploy. See docs/CLOUDFLARE.md."
           fi
 
       - name: Deploy to Cloudflare Pages
@@ -203,7 +207,7 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy _site --project-name=st-peter-trivia --branch=main
 
   deploy-worker:
@@ -220,13 +224,12 @@ jobs:
         shell: bash
         env:
           TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          if [ -n "$TOKEN" ] && [ -n "$ACCOUNT" ]; then
+          if [ -n "$TOKEN" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Cloudflare credentials not set; skipping worker deploy."
+            echo "::warning::CLOUDFLARE_API_TOKEN is not set; skipping worker deploy."
           fi
 
       # HOST_TOKEN is a secret set with `wrangler secret put`, not in the repo.
@@ -236,6 +239,6 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: worker
           command: deploy
