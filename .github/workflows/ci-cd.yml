@@ -1,0 +1,92 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate trivia app
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify required files
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in index.html host.html display.html scoreboard.html styles.css game.js fall-trivia.game.json; do
+            test -s "$file" || { echo "::error file=$file::Missing or empty required file"; exit 1; }
+          done
+
+      - name: Validate game JSON
+        run: python -m json.tool fall-trivia.game.json > /dev/null
+
+      - name: Validate mock CSV data
+        shell: python
+        run: |
+          import csv
+          from pathlib import Path
+
+          required_questions = {"round","category","question","answer","difficulty","points","host_notes"}
+          required_teams = {"team_name","table_number"}
+
+          def validate(path, required):
+              with Path(path).open(newline="", encoding="utf-8-sig") as f:
+                  reader = csv.DictReader(f)
+                  headers = set(reader.fieldnames or [])
+                  missing = required - headers
+                  if missing:
+                      raise SystemExit(f"{path}: missing columns: {sorted(missing)}")
+                  rows = list(reader)
+                  if not rows:
+                      raise SystemExit(f"{path}: no data rows")
+                  print(f"{path}: {len(rows)} rows OK")
+
+          validate("mock/questions.csv", required_questions)
+          validate("mock/teams.csv", required_teams)
+
+      - name: Check internal page references
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'host.html' index.html
+          grep -q 'display.html' index.html
+          grep -q 'scoreboard.html' index.html
+
+  deploy:
+    name: Deploy GitHub Pages
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
