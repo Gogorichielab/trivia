@@ -186,8 +186,19 @@ On pull requests to `main`, CI:
 4. Checks important internal page references.
 
 It also runs the importer unit tests, the Playwright browser suite, and
-Lighthouse (accessibility asserted at 100). CodeQL scanning and Dependabot are
-configured separately under `.github/`.
+Lighthouse (accessibility asserted at 100). Dependabot is configured in
+`.github/dependabot.yml`.
+
+CodeQL runs through GitHub's **default setup**, enabled in the repository's
+Security settings rather than by a workflow file. A committed CodeQL workflow
+cannot coexist with it — the analysis is rejected with "CodeQL analyses from
+advanced configurations cannot be processed when the default setup is enabled"
+— so this repository has no `codeql.yml`.
+
+Default setup scans `vendor/`, which holds third-party minified builds. If that
+raises alerts nobody here can act on, exclude the path from
+Security → Code scanning → CodeQL → Configure, rather than by adding a
+workflow.
 
 On successful pushes to `main`, the deployment job publishes to **GitHub Pages**.
 
