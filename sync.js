@@ -53,6 +53,10 @@
   }
 
   const { url, token } = readConfig();
+  // A host page is authoritative even when no sync token was supplied. Without
+  // this guard, production sync treats /host as a viewer, immediately applies
+  // the worker's state, and can overwrite locally imported teams/questions.
+  const isHostPage = /\/(host|host\.html)$/.test(location.pathname);
 
   // Tell the host what sync is doing. Silence during a game is the one thing
   // worse than no sync at all, so this is visible rather than console-only.
@@ -114,14 +118,16 @@
       const local = loadState();
       // The host is authoritative for its own screen; it posts, it does not
       // take state back from the worker. Viewers follow.
-      if (!token) {
+      if (!token && !isHostPage) {
         localStorage.setItem(
           gameKey(),
           JSON.stringify({ index: state.index, teams: state.teams || [], timer: state.timer || null })
         );
         if (state.game) localStorage.setItem(gameKey() + ":game", JSON.stringify(state.game));
+        // Never reload in response to sync. A socket can deliver its first
+        // state before a page's inline render() function exists; reloading at
+        // that moment creates a permanent reload loop.
         if (typeof window.render === "function") window.render();
-        else if (state.index !== local.index) location.reload();
       }
     } catch {
       /* a malformed push must not wedge the screen */
