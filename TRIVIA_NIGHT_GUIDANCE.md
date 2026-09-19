@@ -31,7 +31,7 @@ Work in this order. Each step is useful even if you never reach the next one.
 | Phase 2: Firebase sync between laptops | Animations and fancy transitions |
 | Phase 4: load the game file, then Next/Back through the states | Images in questions |
 | Basic score grid that saves to Firebase | CSV converter, Download scores button |
-| Big, readable text on display and scoreboard | Countdown timer (use a phone timer) |
+| Big, readable text on display and scoreboard | Countdown timer (optional; off unless you add `&timer=45`) |
 
 ### Security shortcut for one night
 
@@ -136,7 +136,9 @@ TEAM NAME: ______________________     ROUND: ____
 ### Each round, step by step
 
 1. Show the category card and read the round title.
-2. Show each question and read it aloud twice. Give 30 seconds per question.
+2. Show each question and read it aloud twice. Give 45 seconds per question.
+   The app can count this down on the audience screen. It is off unless you
+   ask for it: add `&timer=45` to the host address. A phone timer works too.
 3. After question 8: "Pens down, pass your sheets forward."
 4. Reveal answers one by one while a helper grades.
 5. Enter scores, then save; the scoreboard updates.
