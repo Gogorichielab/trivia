@@ -204,6 +204,67 @@ rather than logging "CLOUDFLARE_API_TOKEN is not set; skipping deploy".
 
 ---
 
+## Rolling back a bad deploy
+
+Sometimes a deploy makes things worse. The app and the worker roll back
+separately, and each one takes about a minute. Neither step needs a code
+change, so you can do this during an event.
+
+Work out which one broke first. If the pages load but the screens stop
+following each other, it is the worker. If a page is blank or broken, it is
+the app.
+
+### Roll back the app (Pages)
+
+Every Pages deploy is kept. Going back to an earlier one does not delete the
+newer one.
+
+1. Cloudflare dashboard → **Workers & Pages** → **st-peter-trivia**.
+2. Open the **Deployments** tab.
+3. Find the last deployment that worked. Check the commit message and time.
+4. Use the **...** menu on that row → **Rollback to this deployment**.
+5. Confirm. The custom domain serves the older build within a few seconds.
+
+Reload `https://trivia.gogorichie.online` in a private window to check. A
+private window avoids showing you a cached copy of the broken version.
+
+### Roll back the worker
+
+```bash
+cd worker
+npx wrangler deployments list     # shows recent versions, newest first
+npx wrangler rollback [version-id] # leave the ID off to pick the previous one
+```
+
+Then check it answers:
+
+```bash
+curl https://trivia-sync.gogorichie.online/health
+# {"ok":true,"hostTokenSet":true}
+```
+
+A rollback does **not** clear `HOST_TOKEN`, and it does **not** erase games
+already stored in Durable Object storage. Screens reconnect on their own
+within about 15 seconds, because `sync.js` keeps retrying with a backoff.
+
+### If you cannot reach the dashboard
+
+The app is built to survive this. Sync is a convenience, not a requirement.
+
+- Open each screen without `?sync=` on the URL. Every page then runs on local
+  storage alone, exactly as it did before sync existed.
+- The host laptop keeps the full game. Load the game file again with the file
+  picker if you need to.
+- If that still does not work, switch to Plan B. See
+  `TRIVIA_NIGHT_GUIDANCE.md`.
+
+### After you roll back
+
+Open an issue describing what broke before you try the fix again. A rollback
+hides the problem; it does not solve it.
+
+---
+
 ## After the event
 
 `AGENTS.md` asks for game data to be deleted afterwards.

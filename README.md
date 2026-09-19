@@ -116,6 +116,7 @@ The host is allowed to change the game. Audience and scoreboard screens are read
 If sync stops working, the host can keep using its local copy. The cloud service is an extra feature, not a requirement for basic game play.
 
 For setup, deployment, and recovery details, see `docs/CLOUDFLARE.md`.
+That file also explains how to roll back a bad deploy, for both the app and the Worker.
 
 ## Security
 
