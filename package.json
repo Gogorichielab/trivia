@@ -1,0 +1,15 @@
+{
+  "name": "st-peter-trivia",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser-based trivia night application for St. Peter Evangelical Lutheran Church",
+  "scripts": {
+    "test:unit": "node --test tests/*.test.js",
+    "test:e2e": "playwright test",
+    "test": "npm run test:unit && npm run test:e2e",
+    "serve": "python3 -m http.server 8000"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
