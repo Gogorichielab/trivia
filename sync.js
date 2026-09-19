@@ -5,18 +5,31 @@
  * storage stays the source of truth and the worker is only a way of pushing
  * that state to the other laptop. A sync outage must never take the game down.
  *
- * Configure by adding to the URL, once per screen:
- *   host.html?game=<code>&sync=https://<worker>.workers.dev&token=<host token>
- *   display.html?game=<code>&sync=https://<worker>.workers.dev
+ * On the deployed site, sync is on by default and points at the production
+ * worker, so game-night URLs stay short:
+ *   https://trivia.gogorichie.online/host?game=<code>&token=<host token>
+ *   https://trivia.gogorichie.online/display?game=<code>
+ *   https://trivia.gogorichie.online/scoreboard?game=<code>
+ *
+ * Anywhere else -- localhost, a file:// copy, a test run -- sync stays off
+ * unless a ?sync= URL is given. That keeps local work and the test suite off
+ * the production worker, and keeps a laptop copy working with no network.
  *
  * The token belongs on the host screen only. Without it a screen can read the
  * game but cannot change it, which is what keeps the audience display from
- * being able to alter a score.
+ * being able to alter a score. The host console is additionally behind
+ * Cloudflare Access; see docs/CLOUDFLARE.md.
  */
 
 (function () {
   const params = new URLSearchParams(location.search);
   const CONFIG_KEY = gameKey() + ":sync";
+
+  // The deployed site talks to the production worker without being told to.
+  // Any other origin must opt in with ?sync=, so tests and offline copies
+  // never reach for the network.
+  const PRODUCTION_HOST = "trivia.gogorichie.online";
+  const PRODUCTION_SYNC = "https://trivia-sync.gogorichie.online";
 
   // Remembered per game code, so a refresh does not need the URL again.
   function readConfig() {
@@ -26,7 +39,8 @@
     } catch {
       stored = {};
     }
-    const url = params.get("sync") || stored.url || "";
+    const onProduction = location.hostname === PRODUCTION_HOST;
+    const url = params.get("sync") || stored.url || (onProduction ? PRODUCTION_SYNC : "");
     const token = params.get("token") || stored.token || "";
     if (url) {
       try {

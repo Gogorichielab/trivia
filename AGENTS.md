@@ -14,6 +14,7 @@ Before making changes, review:
 2. `TRIVIA_NIGHT_GUIDANCE.md` — event plan, priorities, run-of-show, and MVP scope.
 3. `MOCK_DATA.md` — temporary spreadsheet schemas.
 4. `fall-trivia.game.json` — current game-data structure.
+5. `docs/CLOUDFLARE.md` — hosting, sync, Access, and the post-event cleanup.
 
 Treat the guidance document as the product requirements for the event.
 
@@ -45,23 +46,69 @@ For the September 19 event, prioritize work in this order:
 
 Do not spend event-critical time on cosmetic features while core game flow is incomplete.
 
-## Current Architecture
+## Tech Stack
 
-The application is intentionally lightweight and currently uses static HTML, CSS, and JavaScript.
+The application is still plain HTML, CSS and JavaScript with no build step and
+no framework. That is deliberate: the host must be able to open a file and have
+it work. Everything below is additive to that, and the app degrades to a single
+laptop if any of it is unavailable.
+
+| Concern | Choice | Notes |
+| --- | --- | --- |
+| Hosting | **Cloudflare Pages** | `st-peter-trivia`, served at `https://trivia.gogorichie.online`. Direct upload; no build command. |
+| Host authentication | **Cloudflare Access** | Path-scoped to `trivia.gogorichie.online/host*`. Viewer pages stay open. |
+| Cross-laptop sync | **Cloudflare Workers** + **Durable Objects** | `st-peter-trivia-sync` at `https://trivia-sync.gogorichie.online`. One Durable Object per game code. |
+| Spreadsheet import | **PapaParse** + **SheetJS** | Vendored under `vendor/`, never a CDN. |
+| Unit tests | **node:test** | Built in; no test framework dependency. |
+| Browser tests | **Playwright** | Run at 1920x1080 against the real pages. |
+| Accessibility | **axe-core** | WCAG 2.1 A/AA on all four pages. |
+| Performance/quality budgets | **Lighthouse CI** | Accessibility asserted at 100. |
+| CI/CD | **GitHub Actions** | Validate, test, Lighthouse, then deploy. |
+| Code scanning | **CodeQL** | GitHub *default setup*, configured in Security settings. Do not add a `codeql.yml`; an advanced config cannot coexist with default setup and will fail. |
+| Dependency updates | **Dependabot** | Monthly, grouped, npm and Actions. |
+
+### Subdomains must stay single-level
+
+Free Universal SSL covers `*.gogorichie.online` but **not** a second level. A
+hostname like `sync.trivia.gogorichie.online` would have no certificate without
+paid Advanced Certificate Manager. Use `trivia-sync`, not `sync.trivia`.
+
+### Pretty URLs change what Access must cover
+
+Cloudflare Pages serves `host.html` at both `/host` and `/host.html`. An Access
+application scoped to `/host.html` alone leaves `/host` wide open — this was a
+real hole, found by testing rather than by reading. The application is scoped to
+`trivia.gogorichie.online/host*`.
+
+**Any change to page filenames means re-checking the Access path**, and
+re-checking it by fetching the URL, not by reading the config.
+
+## Current Architecture
 
 Important files:
 
 - `index.html` — landing page.
-- `host.html` — host controls.
+- `host.html` — host controls. Behind Cloudflare Access.
 - `display.html` — audience display.
 - `scoreboard.html` — scoreboard.
-- `game.js` — shared game/state logic.
+- `game.js` — shared game/state logic and `esc()`.
+- `import.js` — spreadsheet import.
+- `sync.js` — optional cross-laptop sync; a no-op when unconfigured.
 - `styles.css` — shared presentation styling.
+- `vendor/` — PapaParse and SheetJS, vendored.
+- `worker/` — the Cloudflare Worker and its Durable Object.
 - `fall-trivia.game.json` — development game file.
-- `mock/questions.csv` — temporary question data.
-- `mock/teams.csv` — temporary team data.
+- `mock/questions.csv`, `mock/teams.csv` — temporary fixtures.
 
-Avoid introducing a framework or build system unless there is a clear, event-critical reason.
+Avoid introducing a framework or build system unless there is a clear,
+event-critical reason. Adding a build step means the host can no longer open the
+files directly, which removes a fallback.
+
+### Escaping
+
+Questions, answers and team names come from a spreadsheet someone else typed.
+Every value interpolated into `innerHTML` goes through `esc()` in `game.js`.
+Adding a new interpolation without it is a bug, not a style preference.
 
 ## Data Sources
 
@@ -92,7 +139,13 @@ Current mock schema:
 team_name,table_number
 ```
 
-Spreadsheet import should tolerate reasonable heading variations and provide a useful error when required information cannot be identified.
+Spreadsheet import is implemented in `import.js` and tolerates reasonable
+heading variations. When a required column cannot be identified it fails with
+the headings it actually saw, and reports problem rows by spreadsheet line
+number — all of them at once, never a half-built game.
+
+Keep it that way. Silently dropping a row is worse than refusing the file: a
+question missing at Round 3 on the night cannot be recovered.
 
 ## Game State
 
@@ -111,19 +164,40 @@ Do not require the host to reconstruct scores manually after a refresh.
 
 ## Cross-Laptop Sync
 
-The planned MVP uses Firebase for synchronization between devices.
+Implemented in `worker/` and `sync.js`. See `docs/CLOUDFLARE.md` for deployment.
 
-When implementing synchronization:
+The rules that matter when changing it:
 
-- Host actions should update audience and scoreboard views quickly.
-- Refreshing any screen should restore the current state.
-- A temporarily disconnected display should catch up when it reconnects.
-- Avoid allowing the audience display or scoreboard to modify scores.
-- Keep Firebase configuration separate from game content.
+- **Sync is additive and must stay that way.** With no sync configured, or the
+  worker unreachable, every page falls back to local storage and behaves as it
+  did before. A sync outage is not a game outage. Any change that makes a page
+  depend on the worker to function is wrong.
+- **Local storage is written first**, then the state is posted. The host keeps
+  working when the POST fails.
+- **Only the host writes.** Writes require the `HOST_TOKEN` header, compared in
+  constant time. Viewer screens are handed a URL without a token, so the
+  audience display and scoreboard cannot change a score. This is enforced at the
+  worker, not by the page being polite — keep it that way.
+- **A reconnecting screen is sent current state first**, so a laptop that
+  dropped off the wi-fi catches up rather than showing a stale question.
+- **Durable Object storage, not KV.** The KV free tier allows 1,000 writes a
+  day and a live game writes on every score change.
+- The host console shows a sync badge. Silence about sync during a game is worse
+  than no sync at all; keep failures visible.
 
-For the one-night MVP, test-mode rules may be used only as described in `TRIVIA_NIGHT_GUIDANCE.md`. Use a long random game identifier and do not expose host URLs to guests.
+On the deployed site sync defaults on. Anywhere else — localhost, a `file://`
+copy, a test run — it stays off unless `?sync=` is given, which keeps the test
+suite off the production worker.
 
-Authentication and restrictive rules are post-event priorities unless they can be completed without risking the MVP.
+### Secrets
+
+`HOST_TOKEN` is a Worker secret set with `wrangler secret put`. It is never in
+the repository, never a `[vars]` entry, and never in a commit. The worker
+refuses all writes when it is unset rather than accepting anonymous ones.
+
+Deploys from CI need `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as
+GitHub repository secrets. The deploy jobs skip with a warning when they are
+absent rather than failing the build.
 
 ## Display Requirements
 
@@ -187,36 +261,79 @@ Do not change factual question content merely to make application development ea
 
 ## Testing
 
-Before merging event-critical changes, verify at minimum:
+`AGENTS.md` used to ask for the game flow to be tested rather than only checking
+that files parse. That is now enforced by actual tests. Run them.
 
-1. Landing page loads.
-2. Host page loads.
-3. Audience display loads.
-4. Scoreboard loads.
-5. A game can be loaded.
-6. Host can advance through round → question → answer.
-7. Back navigation works.
-8. Teams can be loaded/created.
-9. Scores can be changed.
-10. Scoreboard ranking updates correctly.
-11. Refresh does not lose live state.
-12. Two-laptop synchronization works when Firebase is enabled.
+```bash
+npm run test:unit    # importer, node:test
+npm run test:e2e     # Playwright, real browser
+npm test             # both
+```
 
-Test the actual game flow rather than only checking that files parse.
+Sync tests need the worker and skip without it:
+
+```bash
+cd worker && npx wrangler dev --port 8787 --local
+SYNC_URL=http://localhost:8787 SYNC_TOKEN=test-token-abc npx playwright test tests/e2e/sync.spec.js
+```
+
+`CHROMIUM_PATH` points Playwright at a pre-installed browser when one exists;
+CI leaves it unset.
+
+### What the tests cover
+
+- `tests/import.test.js` — heading variants, round-column shapes, every
+  loud-failure path, and the real mock spreadsheets.
+- `tests/e2e/game-flow.spec.js` — the round → question → answer walk, that the
+  display never reveals an answer early, scoreboard ranking, state surviving a
+  refresh, team names containing quotes and angle brackets, and question text
+  rendering at 48px or larger.
+- `tests/e2e/a11y.spec.js` — axe-core on all four pages.
+- `tests/e2e/sync.spec.js` — two isolated browser contexts standing in for the
+  two laptops, including reconnect catch-up and a viewer's write being refused.
+
+### Before merging an event-critical change
+
+Add a test for the behaviour you changed. A change to the game flow, the
+importer, or sync without a test is not finished.
+
+Then confirm by hand on the host laptop, in the host browser, against the real
+game file — CI passing is necessary, not sufficient.
+
+### Do not weaken a test to get green
+
+Never skip, disable or quarantine a test to make a change pass. If a test is
+wrong, fix the test and say so in the commit message.
 
 ## CI/CD
 
-GitHub Actions workflow:
+`.github/workflows/ci-cd.yml` runs on pull requests and on pushes to `main`:
 
-```text
-.github/workflows/ci-cd.yml
-```
+1. **validate** — required files, game JSON, mock CSV schemas, page references,
+   and a warning when the game fixture still holds placeholder content.
+2. **test** — importer unit tests and the Playwright suite.
+3. **lighthouse** — all four pages; accessibility asserted at 100.
+4. **deploy** — Cloudflare Pages, on `main` only.
+5. **deploy-worker** — the sync worker, on `main` only.
 
-Pull requests and pushes should pass CI before being considered ready.
+Do not disable validation to make a failing change pass.
 
-Do not disable validation simply to make a failing change pass.
+### The deploy publishes the app shell only
 
-Production deployment is through GitHub Pages from `main`.
+Anything published is world-readable. `mock/questions.csv` is an answer key, and
+the real game file would be another. The deploy copies only the pages, styles,
+scripts and `vendor/`, then **fails** if any `.csv` or `.game.json` reaches the
+publish directory. Do not add question data to that copy step.
+
+The host loads the game file from the laptop through the file picker, which is
+why none of it needs publishing.
+
+### CodeQL
+
+Configured through GitHub's **default setup** in Security settings. Do not add
+a CodeQL workflow file: an advanced configuration cannot coexist with default
+setup, and the analysis fails with "CodeQL analyses from advanced configurations
+cannot be processed when the default setup is enabled".
 
 ## Change Strategy
 
@@ -315,20 +432,22 @@ The MVP is ready for game night when:
 
 - The final question spreadsheet imports successfully.
 - The final team spreadsheet imports successfully.
-- Host, display, and scoreboard work on the intended laptops.
-- Cross-laptop state synchronization is reliable.
-- Scores survive refresh/reconnect.
+- Host, display and scoreboard work on the intended laptops.
+- Cross-laptop state synchronisation is reliable, and the host badge reads
+  **Sync live**.
+- Scores survive refresh and reconnect.
 - The full game can be rehearsed from lobby through tiebreaker.
 - Text is readable on the actual church display equipment.
-- CI passes.
+- `npm test` passes and CI is green.
+- `/host` and `/host.html` both redirect to Cloudflare Access; `/display` and
+  `/scoreboard` do not.
 - A no-code backup is ready.
 
 ## After the Event
 
 Post-event improvements may include:
 
-- Host authentication.
-- Locked-down Firebase security rules.
+- Tighter Cloudflare Access policies and a shorter Access session.
 - Countdown timer.
 - Animations and transitions.
 - Image questions.

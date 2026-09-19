@@ -2,7 +2,18 @@
 
 A lightweight, browser-based trivia application for **St. Peter Evangelical Lutheran Church in Gilberts, Illinois**.
 
-The app is being built for Trivia Night on **Saturday, September 19, 2026**. It is designed to run from laptops connected to the church TVs/projector and provide separate host, audience, and scoreboard views.
+Live at **<https://trivia.gogorichie.online>**.
+
+| Screen | URL |
+| --- | --- |
+| Landing | <https://trivia.gogorichie.online> |
+| Host console | <https://trivia.gogorichie.online/host> (Cloudflare Access) |
+| Audience display | <https://trivia.gogorichie.online/display> |
+| Scoreboard | <https://trivia.gogorichie.online/scoreboard> |
+
+The app runs from laptops connected to the church TVs/projector and provides
+separate host, audience and scoreboard views. It also runs from a local copy
+with no network at all.
 
 ## Current Status
 
@@ -25,7 +36,7 @@ Implemented:
 - **Unit tests for the importer and Playwright browser tests for the game flow**
 - **Accessibility checks (axe-core) and Lighthouse budgets**
 - GitHub Actions CI/CD pipeline
-- GitHub Pages deployment workflow
+- Cloudflare Pages deployment workflow
 - **CodeQL scanning and Dependabot updates**
 
 Still planned:
@@ -45,19 +56,21 @@ Still planned:
 | Page | Purpose |
 | --- | --- |
 | `index.html` | Landing page |
-| `host.html` | Host controls, team management, scoring, and game-file loading |
+| `host.html` | Host controls, team management, scoring, and spreadsheet import |
 | `display.html` | Audience-facing question and answer display |
 | `scoreboard.html` | Ranked team scoreboard |
 
-Use the same game code on each view:
+Use the same game code on each view. On the deployed site sync is on by
+default, so no `&sync=` is needed:
 
 ```text
-host.html?game=k7Qm29xRtp
-display.html?game=k7Qm29xRtp
-scoreboard.html?game=k7Qm29xRtp
+https://trivia.gogorichie.online/host?game=k7Qm29xRtpLm42&token=<host token>
+https://trivia.gogorichie.online/display?game=k7Qm29xRtpLm42
+https://trivia.gogorichie.online/scoreboard?game=k7Qm29xRtpLm42
 ```
 
-For the event, use a long random game code rather than an easily guessed value.
+Use a long random game code. The worker rejects anything under 8 characters.
+The token goes on the host screen only.
 
 ## Game Format
 
@@ -119,22 +132,36 @@ team_name,table_number
 
 The importer should tolerate reasonable variations in spreadsheet column names when the final files are provided.
 
+## Tech Stack
+
+| Concern | Choice |
+| --- | --- |
+| Hosting | Cloudflare Pages (`st-peter-trivia`) |
+| Host authentication | Cloudflare Access, scoped to `/host*` |
+| Cross-laptop sync | Cloudflare Workers + Durable Objects |
+| Spreadsheet import | PapaParse + SheetJS, vendored |
+| Unit tests | `node:test` |
+| Browser tests | Playwright |
+| Accessibility | axe-core |
+| Budgets | Lighthouse CI |
+| CI/CD | GitHub Actions |
+| Code scanning | CodeQL (GitHub default setup) |
+| Dependencies | Dependabot |
+
+No framework and no build step: the host must be able to open a file and have
+it work.
+
 ## Cross-Laptop Sync
 
-Optional, and off unless configured. See [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md)
-for deployment, the host token, and why Cloudflare Access is not usable without
-a domain.
+The host drives the audience display on a second laptop through a Cloudflare
+Worker. See [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md) for the full setup.
 
-```text
-host.html?game=<code>&sync=https://<worker>.workers.dev&token=<host token>
-display.html?game=<code>&sync=https://<worker>.workers.dev
-```
+Sync is additive. If the worker is unreachable, every page falls back to local
+storage and behaves as it did before — a sync outage is not a game outage.
 
-The token goes on the host screen only. Viewer screens have nothing to send, so
-they cannot change a score.
-
-The host console shows a sync badge; at the T-60 go/no-go check it must read
-**Sync live**.
+Viewer screens have no token, so they cannot change a score; that is enforced
+at the worker. The host console shows a sync badge, and at the T-60 go/no-go
+check it must read **Sync live**.
 
 ## Testing
 
@@ -168,7 +195,7 @@ Then open:
 http://localhost:8000/
 ```
 
-Opening the HTML files directly may work for basic testing, but a local web server more closely matches GitHub Pages behavior.
+Opening the HTML files directly may work for basic testing, but a local web server more closely matches how Cloudflare Pages serves it.
 
 ## CI/CD
 
@@ -200,15 +227,16 @@ raises alerts nobody here can act on, exclude the path from
 Security → Code scanning → CodeQL → Configure, rather than by adding a
 workflow.
 
-On successful pushes to `main`, the deployment job publishes to **GitHub Pages**.
+On successful pushes to `main`, the deploy jobs publish the app to
+**Cloudflare Pages** and the sync worker to **Cloudflare Workers**. They skip
+with a warning until `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` exist
+as repository secrets.
 
 The deploy publishes the app shell only. Anything published there is
 world-readable, so question and answer data is deliberately excluded — `mock/`
 holds an answer key, and the real game file would too. The deploy fails if any
 question or answer data reaches the publish directory. The host loads the game
 file from the laptop through the file picker.
-
-GitHub Pages must be configured to use **GitHub Actions** as its deployment source.
 
 ## Game-Night Reliability
 
@@ -223,14 +251,23 @@ A go/no-go test should be performed at the venue before the event. If the app is
 
 ## Security
 
-The planned one-night Firebase MVP may temporarily use permissive test-mode rules while authentication is unfinished.
+Two locks protect the host console, and they cover different things:
 
-When Firebase synchronization is added:
+- **Cloudflare Access** decides who may *open* the page. Scoped to
+  `trivia.gogorichie.online/host*`. Viewer pages stay open deliberately —
+  nobody wants an auth prompt on a TV.
+- **`HOST_TOKEN`** decides who may *change* the game. A Worker secret, compared
+  in constant time, never in this repository.
 
-- Use a long random game code.
-- Do not share host/display URLs publicly.
-- Delete event game data afterward.
-- Add host authentication and restrictive Firebase rules before future events.
+Note that Cloudflare Pages serves `host.html` at both `/host` and `/host.html`.
+An Access rule covering only one of them leaves the other open. If page
+filenames change, re-test by fetching the URLs.
+
+Also:
+
+- Use a long random game code; the worker rejects anything under 8 characters.
+- Do not project the host screen or share its URL — the token is in it.
+- Rotate the token and delete the game data after the event.
 
 ## Repository Structure
 

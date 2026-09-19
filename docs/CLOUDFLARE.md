@@ -1,179 +1,200 @@
-# Cross-laptop sync on Cloudflare
+# Cloudflare setup
 
-The app works on one laptop with no Cloudflare account at all. This document
-covers the optional worker in `worker/`, which lets the host drive an audience
-display running on a **second** laptop.
+Everything below is **already deployed and working**. This document is the
+record of what exists, how to change it, and how to take it down afterwards.
 
-If the worker is not configured, or is unreachable during the event, every page
-falls back to local storage and behaves exactly as it did before. A sync outage
-is not a game outage.
+| Thing | Where |
+| --- | --- |
+| App | <https://trivia.gogorichie.online> |
+| Host console | <https://trivia.gogorichie.online/host> (behind Access) |
+| Sync worker | <https://trivia-sync.gogorichie.online> |
+| Pages project | `st-peter-trivia` (also at `st-peter-trivia.pages.dev`) |
+| Worker | `st-peter-trivia-sync` |
+| Access application | "St. Peter Trivia - Host Console" |
+| Zero Trust team | `gogorichiellc.cloudflareaccess.com` |
+
+The app still runs on one laptop with no network at all. Sync and Access are
+additive: if Cloudflare has a bad night, open the files locally and the game
+works exactly as it did before.
 
 ---
 
-## What is used, and what is not
+## Game-night URLs
+
+Use a long random game code — the worker rejects anything under 8 characters,
+because a short code is guessable and a guessed code reaches a live game.
+
+**Host laptop** (the token goes on this screen only):
+
+```
+https://trivia.gogorichie.online/host?game=k7Qm29xRtpLm42&token=<host token>
+```
+
+**Display laptop:**
+
+```
+https://trivia.gogorichie.online/display?game=k7Qm29xRtpLm42
+https://trivia.gogorichie.online/scoreboard?game=k7Qm29xRtpLm42
+```
+
+No `&sync=` is needed: on the deployed site sync is on by default. Settings are
+remembered per game code, so a refresh does not need the full URL again.
+
+### The badge is the go/no-go signal
+
+At the T-60 check the host console badge must read **Sync live** in green.
+
+| Badge | Meaning |
+| --- | --- |
+| `Sync live` | Connected. Changes reach the other laptop. |
+| `Sync connecting…` | Opening the socket. Should settle in a second or two. |
+| `Sync off — this laptop only` | Not configured. Host and display must share one laptop. |
+| `Sync offline` | Cannot reach the worker; retrying with backoff. The game still runs locally. |
+| `Sync error — Host token rejected` | The `token=` value is wrong. Fix it, or drop it and run on one laptop. |
+
+---
+
+## Two locks on the host console
+
+Access and the host token protect different things, and both are needed.
+
+**Cloudflare Access** decides *who may open the page*. It is scoped to
+`trivia.gogorichie.online/host*` and currently allows one identity:
+`Richard@gogorichie.com`, by email one-time code. Viewer pages are deliberately
+outside it — nobody wants an auth prompt on a TV.
+
+> ### The pretty-URL trap
+>
+> Cloudflare Pages serves `host.html` at **both** `/host` and `/host.html`. An
+> Access application scoped to `/host.html` alone leaves `/host` completely
+> open. That happened here and was caught by fetching the URL, not by reading
+> the config.
+>
+> The wildcard `host*` covers both. **If page filenames ever change, re-test
+> this by fetching the URL:**
+>
+> ```bash
+> curl -s -o /dev/null -w "%{http_code}\n" https://trivia.gogorichie.online/host       # expect 302
+> curl -s -o /dev/null -w "%{http_code}\n" https://trivia.gogorichie.online/host.html  # expect 302
+> curl -s -o /dev/null -w "%{http_code}\n" https://trivia.gogorichie.online/display    # expect 200
+> ```
+
+**`HOST_TOKEN`** decides *who may change the game*. It is a Worker secret, sent
+as `x-host-token` and compared in constant time so it cannot be guessed a
+character at a time by timing responses. Viewer screens are handed a URL without
+it, so the audience display cannot change a score — enforced at the worker, not
+by the page being polite.
+
+There is a test for exactly this: a display page issuing a direct `POST` gets a
+403 and the host's scores are unchanged (`tests/e2e/sync.spec.js`, "the audience
+display cannot change a score").
+
+A token in a URL can still be shoulder-surfed or land in a screenshot, so:
+
+- Do not project the host screen.
+- Do not share the host URL in any group chat.
+- Rotate it after the event (below).
+
+### Adding another host
+
+Zero Trust → Access → Applications → "St. Peter Trivia - Host Console" →
+Policies → add the email. They get a one-time code by email. No password.
+
+---
+
+## Which free services are used
 
 | Service | Used | Why |
 | --- | --- | --- |
-| **Workers** | Yes | Hosts the sync endpoint. Free plan: 100,000 requests/day. |
-| **Durable Objects** | Yes | One object per game code holds state and fans changes out over WebSocket. SQLite-backed classes are the ones on the free plan. |
-| **Workers Secrets** | Yes | Holds `HOST_TOKEN`. Free. |
-| **Pages** | No | The site already deploys to GitHub Pages. Moving would gain nothing here. |
-| **KV** | No | The free tier allows 1,000 writes/day. A live game writes on every score change and every question advance, which is uncomfortably close. Durable Object storage has no such daily write cap. |
-| **D1** | No | A relational database for four fields of state would be more to go wrong, not less. |
+| **Pages** | Yes | Static hosting on a custom domain, free and unmetered for this size. |
+| **Workers** | Yes | The sync endpoint. Free plan: 100,000 requests/day. |
+| **Durable Objects** | Yes | One object per game code, holding state and fanning changes out over WebSocket. |
+| **Workers Secrets** | Yes | `HOST_TOKEN`. |
+| **Access (Zero Trust)** | Yes | Free for up to 50 users. Needs a domain in your Cloudflare account, which `gogorichie.online` is. |
+| **DNS** | Yes | `trivia` and `trivia-sync` records, both proxied. |
+| **Universal SSL** | Yes | Free, and the reason both subdomains are single-level. |
+| **KV** | No | The free tier allows 1,000 writes/day. A live game writes on every score change and every question advance. Durable Object storage has no daily write cap. |
+| **D1** | No | A relational database for four fields of state is more to go wrong, not less. |
 | **R2** | No | Nothing large enough to need object storage. |
 | **Turnstile** | No | No public form to protect. |
 | **Zaraz / Web Analytics** | No | Nobody needs attendance analytics for a church trivia night, and it adds a third-party script to a page that must work offline. |
-| **Access** | See below | Needs a domain. |
+| **Images / Stream** | No | Not free, and no image or video questions yet. |
 
 > Free-tier limits move. Check
 > <https://developers.cloudflare.com/workers/platform/limits/> and
 > <https://developers.cloudflare.com/durable-objects/platform/pricing/>
 > before relying on them for an event.
 
+### Subdomains must stay single-level
+
+Free Universal SSL covers `*.gogorichie.online` but **not** a second level.
+`sync.trivia.gogorichie.online` would have no certificate without paid Advanced
+Certificate Manager. That is why the worker is at `trivia-sync`, not
+`sync.trivia`.
+
 ---
 
-## Deploying the worker
+## Deploying by hand
 
-You need a free Cloudflare account. No card is required for the Workers free
-plan.
+CI deploys on every push to `main` once the repository secrets are set (below).
+To deploy by hand:
 
 ```bash
+# Worker
 cd worker
 npm install
-npx wrangler login          # opens a browser
+npx wrangler login
 npx wrangler deploy
+
+# App
+cd ..
+rm -rf _site && mkdir _site
+cp index.html host.html display.html scoreboard.html styles.css game.js import.js sync.js _site/
+cp -r vendor _site/vendor
+npx wrangler pages deploy _site --project-name=st-peter-trivia --branch=main
 ```
 
-Deploy prints your worker URL, something like:
-
-```
-https://st-peter-trivia-sync.<your-subdomain>.workers.dev
-```
-
-Then set the host token. This is the only thing standing between the audience
-and your scoreboard, so make it long and random:
+Check the worker afterwards:
 
 ```bash
-# Generate one:
-openssl rand -hex 24
-
-npx wrangler secret put HOST_TOKEN
-# paste the value when prompted
-```
-
-Check it took:
-
-```bash
-curl https://st-peter-trivia-sync.<your-subdomain>.workers.dev/health
+curl https://trivia-sync.gogorichie.online/health
 # {"ok":true,"hostTokenSet":true}
 ```
 
-If `hostTokenSet` is `false`, the worker refuses every write rather than
+If `hostTokenSet` is `false` the worker refuses every write rather than
 accepting anonymous ones. Set the secret before the event.
 
-### Lock the origin down
+### Automatic deploys from CI
 
-While testing, `ALLOWED_ORIGIN` is `*`. Before the event, set it in
-`worker/wrangler.toml` to your Pages origin and redeploy:
+The `deploy` and `deploy-worker` jobs skip with a warning until two GitHub
+repository secrets exist (Settings → Secrets and variables → Actions):
 
-```toml
-[vars]
-ALLOWED_ORIGIN = "https://gogorichielab.github.io"
-```
-
----
-
-## Using it on the night
-
-Open each screen with the same game code. Use a long random code — a short one
-is guessable, and a guessed code reaches a live game. The worker rejects codes
-shorter than 8 characters.
-
-**Host laptop** (the token goes on this screen only):
-
-```
-host.html?game=k7Qm29xRtpLm42&sync=https://<worker>.workers.dev&token=<host token>
-```
-
-**Display laptop:**
-
-```
-display.html?game=k7Qm29xRtpLm42&sync=https://<worker>.workers.dev
-scoreboard.html?game=k7Qm29xRtpLm42&sync=https://<worker>.workers.dev
-```
-
-The settings are remembered per game code, so a refresh does not need the full
-URL again.
-
-### The badge is the go/no-go signal
-
-The host console shows a sync badge. At the T-60 check, it must read
-**Sync live** in green.
-
-| Badge | Meaning |
+| Secret | Value |
 | --- | --- |
-| `Sync off — this laptop only` | No `sync=` in the URL. Host and display must be on the same laptop. |
-| `Sync connecting…` | Opening the socket. Should settle within a second or two. |
-| `Sync live` | Connected. Changes reach the other laptop. |
-| `Sync offline` | Cannot reach the worker; retrying with backoff. The game still runs locally. |
-| `Sync error — Host token rejected` | The `token=` value is wrong. Fix it, or drop `sync=` and run on one laptop. |
+| `CLOUDFLARE_ACCOUNT_ID` | `5ea902cfe05440351866b1a0f0535407` |
+| `CLOUDFLARE_API_TOKEN` | A token with **Cloudflare Pages: Edit** and **Workers Scripts: Edit** |
 
----
-
-## Why the display cannot change a score
-
-`AGENTS.md` asks that the audience display and scoreboard not be able to modify
-scores. That is enforced at the worker, not in the page:
-
-- Writes are `POST`, and require the `x-host-token` header.
-- The token is compared in constant time, so it cannot be guessed a character
-  at a time by timing responses.
-- Viewer screens are given the URL **without** a token, so they have nothing to
-  send. Messages they push over the WebSocket are ignored.
-
-There is a test for exactly this: a display page issuing a direct `POST` gets a
-403 and the host's scores are unchanged
-(`tests/e2e/sync.spec.js`, "the audience display cannot change a score").
-
----
-
-## Cloudflare Access — read this before planning on it
-
-Access is free for up to 50 users, and would let you put an email one-time-code
-in front of the host page.
-
-**It needs a domain you have added to Cloudflare.** Access policies attach to a
-hostname in a zone you control. It cannot protect a bare `*.workers.dev` or a
-production `*.pages.dev` URL. A domain costs money each year, so on a
-strictly-free footing Access is not available.
-
-The `HOST_TOKEN` above is the free substitute. It is weaker — a token in a URL
-can be shoulder-surfed or land in a screenshot — so:
-
-- Do not project the host screen.
-- Do not share the host URL in any group chat.
-- Rotate the token after the event: `npx wrangler secret put HOST_TOKEN`.
-
-If you already have a domain on Cloudflare, add Access afterwards:
-
-1. Zero Trust → Access → Applications → Add a self-hosted application.
-2. Point it at your host page's hostname and path.
-3. Policy: Allow, with an Emails rule listing the host and helpers.
-4. Keep `HOST_TOKEN` as well. Two locks are better than one.
+Create the token at My Profile → API Tokens → Create Token → Custom token.
+Scope it to this account and those two permissions only.
 
 ---
 
 ## After the event
 
-`AGENTS.md` asks for the game data to be deleted afterwards.
+`AGENTS.md` asks for game data to be deleted afterwards.
 
 ```bash
-# Rotate the token so old URLs stop working.
+# Rotate the host token so old URLs stop working.
 cd worker && npx wrangler secret put HOST_TOKEN
-
-# Or remove the worker and its stored state entirely.
-npx wrangler delete
 ```
+
+To remove the sync backend and its stored games entirely:
+
+```bash
+npx wrangler delete           # deletes the worker and its Durable Objects
+```
+
+Tighten or remove Access in Zero Trust → Access → Applications.
 
 ---
 
@@ -181,14 +202,16 @@ npx wrangler delete
 
 ```bash
 cd worker
-echo 'HOST_TOKEN="test-token-abc"' > .dev.vars   # already gitignored
+echo 'HOST_TOKEN="test-token-abc"' > .dev.vars   # gitignored
 npx wrangler dev --port 8787 --local
 ```
 
-Then, from the repository root:
+Then from the repository root:
 
 ```bash
 SYNC_URL=http://localhost:8787 SYNC_TOKEN=test-token-abc npx playwright test tests/e2e/sync.spec.js
 ```
 
 These tests skip when `SYNC_URL` is unset, so CI stays green without a worker.
+Local pages never reach the production worker: sync only defaults on when the
+page is served from `trivia.gogorichie.online`.

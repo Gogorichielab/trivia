@@ -15,9 +15,13 @@ tag = "v1"
 new_sqlite_classes = ["GameRoom"]
 
 [vars]
-# Set to the GitHub Pages origin before the event so only that page can call
-# the worker from a browser. "*" is fine while testing.
-ALLOWED_ORIGIN = "*"
+# Only the deployed app may call the worker from a browser.
+ALLOWED_ORIGIN = "https://trivia.gogorichie.online"
+
+# Deployed at https://trivia-sync.gogorichie.online (custom domain on the
+# gogorichie.online zone). A single-level subdomain deliberately: free
+# Universal SSL does not cover two levels, so sync.trivia.gogorichie.online
+# would have no certificate.
 
 # HOST_TOKEN is a secret, never a var. Set it with:
 #   npx wrangler secret put HOST_TOKEN
