@@ -341,6 +341,14 @@ cannot be processed when the default setup is enabled".
 
 These rules apply to all application work in this repository, not only event-critical changes.
 
+### Documentation readability
+
+- Write project documentation for an **8th-grade reading level** unless the document is specifically for a technical audience that requires precise technical language.
+- Prefer short sentences, common words, clear headings, and concrete examples.
+- Explain acronyms and specialized terms the first time they appear.
+- Do not remove necessary technical accuracy just to make the wording simpler.
+- README content should be understandable to someone who finds the project with no prior context.
+
 ### Work from the backlog
 
 - Every non-trivial change should map to a GitHub **Feature**, **Task**, or **Bug**.
