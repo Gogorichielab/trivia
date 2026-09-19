@@ -9,11 +9,9 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: deploy-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -28,7 +26,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for file in index.html host.html display.html scoreboard.html styles.css game.js fall-trivia.game.json; do
+          for file in index.html host.html display.html scoreboard.html styles.css game.js import.js fall-trivia.game.json vendor/papaparse.min.js vendor/xlsx.full.min.js; do
             test -s "$file" || { echo "::error file=$file::Missing or empty required file"; exit 1; }
           done
 
@@ -67,26 +65,177 @@ jobs:
           grep -q 'display.html' index.html
           grep -q 'scoreboard.html' index.html
 
-  deploy:
-    name: Deploy GitHub Pages
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: validate
+      # The old checks confirmed the game file parsed, which a file holding
+      # five placeholder questions does. Warn when the fixture is not real
+      # content, so a deploy cannot quietly ship placeholders to the TV.
+      - name: Warn on placeholder game content
+        shell: python
+        run: |
+          import json, os
+          from pathlib import Path
+
+          game = json.loads(Path("fall-trivia.game.json").read_text())
+          rounds = game.get("rounds", [])
+          counts = [len(r.get("questions", [])) for r in rounds]
+          text = json.dumps(game).lower()
+
+          notes = []
+          if "placeholder" in text:
+              notes.append("contains the word 'placeholder'")
+          thin = [i + 1 for i, n in enumerate(counts) if n < 8]
+          if thin:
+              notes.append(f"rounds {thin} have fewer than 8 questions (counts: {counts})")
+
+          if notes:
+              print("::warning file=fall-trivia.game.json::Development fixture, not event content: "
+                    + "; ".join(notes))
+          else:
+              print(f"fall-trivia.game.json: {len(rounds)} rounds, {sum(counts)} questions")
+
+  test:
+    name: Unit and browser tests
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload site artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
-          path: .
+          node-version: "22"
+          cache: npm
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run importer unit tests
+        run: npm run test:unit
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser tests
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  lighthouse:
+    name: Lighthouse
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run Lighthouse CI
+        run: npx --yes @lhci/cli@0.14.x autorun
+
+      - name: Upload Lighthouse report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-report
+          path: .lighthouseci/
+          retention-days: 7
+
+  deploy:
+    name: Deploy to Cloudflare Pages
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [validate, test, lighthouse]
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://trivia.gogorichie.online
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Publish the app shell only. Anything published is world-readable, so
+      # question and answer data stays out of it: mock/ holds an answer key,
+      # and fall-trivia.game.json would hold the real one. The host loads the
+      # game file from the laptop through the file picker.
+      - name: Assemble site
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _site && mkdir -p _site
+          cp index.html host.html display.html scoreboard.html styles.css game.js import.js sync.js _site/
+          cp -r vendor _site/vendor
+          echo "Publishing:"
+          find _site -type f | sort
+
+      - name: Verify no answer data is being published
+        shell: bash
+        run: |
+          set -euo pipefail
+          if find _site \( -name '*.csv' -o -name '*.game.json' \) | grep -q .; then
+            echo "::error::Question or answer data found in the publish directory"
+            exit 1
+          fi
+          echo "No question or answer data in _site."
+
+      - name: Check deploy credentials are present
+        id: creds
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$TOKEN" ] && [ -n "$ACCOUNT" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::CLOUDFLARE_API_TOKEN and/or CLOUDFLARE_ACCOUNT_ID are not set; skipping deploy. See docs/CLOUDFLARE.md."
+          fi
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.creds.outputs.ready == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy _site --project-name=st-peter-trivia --branch=main
+
+  deploy-worker:
+    name: Deploy sync worker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [validate, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check deploy credentials are present
+        id: creds
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$TOKEN" ] && [ -n "$ACCOUNT" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Cloudflare credentials not set; skipping worker deploy."
+          fi
+
+      # HOST_TOKEN is a secret set with `wrangler secret put`, not in the repo.
+      # Redeploying the worker does not clear it.
+      - name: Deploy worker
+        if: steps.creds.outputs.ready == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: deploy

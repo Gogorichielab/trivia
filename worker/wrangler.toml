@@ -1,0 +1,28 @@
+name = "st-peter-trivia-sync"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# One Durable Object per game code holds that game's state.
+[[durable_objects.bindings]]
+name = "GAME_ROOM"
+class_name = "GameRoom"
+
+# SQLite-backed Durable Objects are the class available on the Workers free
+# plan. Verify current free-tier limits before the event:
+# https://developers.cloudflare.com/durable-objects/platform/pricing/
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameRoom"]
+
+[vars]
+# Only the deployed app may call the worker from a browser.
+ALLOWED_ORIGIN = "https://trivia.gogorichie.online"
+
+# Deployed at https://trivia-sync.gogorichie.online (custom domain on the
+# gogorichie.online zone). A single-level subdomain deliberately: free
+# Universal SSL does not cover two levels, so sync.trivia.gogorichie.online
+# would have no certificate.
+
+# HOST_TOKEN is a secret, never a var. Set it with:
+#   npx wrangler secret put HOST_TOKEN
+# Without it the worker refuses all writes rather than accepting anonymous ones.
