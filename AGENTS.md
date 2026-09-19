@@ -230,15 +230,73 @@ Because this is a live-event application with a short deadline:
 - Do not introduce unnecessary dependencies.
 - Do not commit secrets, credentials, private keys, or service-account files.
 
-## Game-Day Freeze
+## Game-Day Change Policy
 
-Per the event plan:
+Code **may** be pushed on game day. Event-critical work is not always finished
+the night before, and forcing a hard freeze onto an unfinished MVP pushes the
+event onto Plan B for reasons that were fixable.
 
-> **Do not push code changes on game day.**
+Game-day pushes are allowed under the gates below. The gates are the point —
+without them this section is just "push whatever."
 
-The game is Saturday, September 19, 2026.
+### Gate 1: Hard cutoff
 
-Event-critical code should be finalized and rehearsed before game day. If the application is not reliable at the venue's go/no-go checkpoint, use Plan B rather than debugging during the event.
+**All pushes stop at T-60 minutes**, the venue go/no-go checkpoint in
+`TRIVIA_NIGHT_GUIDANCE.md`.
+
+After the cutoff the repository is frozen for the night. Whatever is running on
+the host laptop at T-60 is what runs the event. If it is not good enough at
+that moment, the answer is Plan B, not another commit.
+
+Never push, deploy, or reload the deployed site while a round is in progress.
+
+### Gate 2: Scope
+
+On game day, change only what the event needs to run:
+
+- Bugs that block the host, display, scoreboard, or scoring.
+- Getting the real question and team data into the app.
+- Readability fixes on the actual church display equipment.
+
+Do not, on game day:
+
+- Refactor, reorganize, or rename anything working.
+- Add a framework, build step, dependency, or third-party service.
+- Start work that cannot be finished and rehearsed before the cutoff.
+- Touch CI validation to make a change pass.
+
+If a fix cannot be explained in one sentence, it is not a game-day fix.
+
+### Gate 3: Rehearsed, not just green
+
+CI passing is necessary and not sufficient. CI checks that files parse; it does
+not check that the game plays.
+
+Before a game-day change counts as done, run it **on the host laptop, in the
+host browser, against the real game file**:
+
+1. Load the game data.
+2. Advance round → question → answer, and go back.
+3. Add a team, change a score, confirm the scoreboard reorders.
+4. Refresh every open window and confirm nothing was lost.
+
+### Gate 4: Rollback path
+
+Every game-day push must be revertible in under five minutes:
+
+- Push small, single-purpose commits. No batched changes.
+- Know the last good commit SHA before pushing the next one.
+- Rolling back is `git revert <sha>`, push, and wait for Pages to redeploy.
+- Because a redeploy is not instant, keep a known-good copy of the game file
+  saved locally so the host can reload it without waiting on a deploy.
+
+If a rollback is needed after the cutoff, do not roll back. Go to Plan B.
+
+### Gate 5: Plan B stays warm
+
+Plan B is not retired by a successful game-day push. Keep the slides,
+the spreadsheet scoreboard, the printed answer key, and the paper tally sheet
+ready until the event is over.
 
 ## Plan B Is a Feature
 

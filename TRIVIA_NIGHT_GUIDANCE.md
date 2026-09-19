@@ -52,7 +52,18 @@ Skipping sign-in means using Firebase "test mode" rules, which let anyone write.
 | 5 (30 min) | Big fonts, 1920 × 1080 layout | Readable from 20 feet away |
 | **Checkpoint** | **Tonight, before bed** | **If Block 3 isn't working, stop building and use Plan B** |
 
-Don't push any code changes on game day.
+### Pushing code on game day
+
+Game-day pushes are allowed, but gated. See **Game-Day Change Policy** in
+`AGENTS.md` for the full rules. The short version:
+
+- **All pushes stop at T-60**, the go/no-go checkpoint in Section 4.
+- Fix only what blocks the event running. No refactors, no new dependencies.
+- Rehearse each change on the host laptop before calling it done. CI passing
+  is not the same as the game playing.
+- Small, single-purpose commits, so a revert takes minutes.
+- Never push or reload the deployed site mid-round.
+- Plan B stays ready regardless of how well the pushes go.
 
 ---
 
