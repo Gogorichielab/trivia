@@ -1,189 +1,99 @@
 # St. Peter Trivia Night
 
-A lightweight, browser-based trivia application for **St. Peter Evangelical Lutheran Church in Gilberts, Illinois**.
+St. Peter Trivia Night is a simple web app for running a live trivia game at **St. Peter Evangelical Lutheran Church in Gilberts, Illinois**.
 
-Live at **<https://trivia.gogorichie.online>**.
+The app gives the host one screen to run the game, an audience screen for questions and answers, and a scoreboard screen. It is built to work on church laptops and large TVs or projectors.
 
-| Screen | URL |
+The live app is at <https://trivia.gogorichie.online>.
+
+## What the app does
+
+The app has three main screens:
+
+| Screen | What it does |
 | --- | --- |
-| Landing | <https://trivia.gogorichie.online> |
-| Host console | <https://trivia.gogorichie.online/host> (Cloudflare Access) |
-| Audience display | <https://trivia.gogorichie.online/display> |
-| Scoreboard | <https://trivia.gogorichie.online/scoreboard> |
+| Host | Runs the game, loads questions and teams, and changes scores |
+| Display | Shows rounds, questions, and answers to the audience |
+| Scoreboard | Shows team rankings and scores |
 
-The app runs from laptops connected to the church TVs/projector and provides
-separate host, audience and scoreboard views. It also runs from a local copy
-with no network at all.
+The host can load questions and team names from CSV or Excel files. The app checks the files and gives a useful error if something is wrong.
 
-## Current Status
+The app can also keep two laptops in sync. For example, one laptop can run the host screen while another laptop is connected to the projector.
 
-This repository currently contains an MVP for game-night testing.
+## Why this project exists
 
-Implemented:
+This project was built for a church trivia night. The main goals are simple:
 
-- Host console
-- Audience-facing question/answer display
-- Ranked scoreboard
-- Team creation and score adjustment
-- Next/Back game navigation
-- Round, question, answer reveal, and tiebreaker states
-- JSON game-file loading
-- **Spreadsheet import for questions and teams (.csv, .xlsx)**
-- **Cross-laptop synchronisation via Cloudflare Workers (optional)**
-- **Read-only audience screens, enforced at the worker**
-- Mock question and team datasets
-- Large-format TV/projector styling
-- **Unit tests for the importer and Playwright browser tests for the game flow**
-- **Accessibility checks (axe-core) and Lighthouse budgets**
-- GitHub Actions CI/CD pipeline
-- Cloudflare Pages deployment workflow
-- **CodeQL scanning and Dependabot updates**
+- Make the game easy for a volunteer to run.
+- Make questions easy to read from across the room.
+- Keep scores safe if a browser is refreshed.
+- Let separate laptops stay in sync.
+- Keep a simple backup plan if the internet or cloud service fails.
 
-Still planned:
+The project uses plain HTML, CSS, and JavaScript. There is no web framework or build step. This keeps the app small and makes it possible to run a local copy if needed.
 
-- Host authentication (Cloudflare Access needs a domain; see below)
-- Timer
-- Improved score-entry workflow
-- Animations/transitions
-- Download/export scores
+## Current features
 
-> The app runs on one laptop with no accounts at all. Cross-laptop sync is
-> optional: if the worker is not configured or cannot be reached, every page
-> falls back to local storage and behaves as it did before.
+The project currently includes:
 
-## App Pages
+- Host controls with Previous and Next buttons.
+- Question and answer reveal screens.
+- Team creation and score changes.
+- A ranked scoreboard.
+- CSV and Excel imports for questions and teams.
+- Five-round games and a tiebreaker.
+- Local browser storage for game state.
+- Optional cross-laptop sync using Cloudflare Workers and Durable Objects.
+- Cloudflare Access protection for the host page.
+- A host token that protects game-changing API requests.
+- Automated unit, browser, accessibility, and Lighthouse tests.
+- GitHub Actions for testing and deployment.
+- CodeQL security scanning and Dependabot updates.
 
-| Page | Purpose |
-| --- | --- |
-| `index.html` | Landing page |
-| `host.html` | Host controls, team management, scoring, and spreadsheet import |
-| `display.html` | Audience-facing question and answer display |
-| `scoreboard.html` | Ranked team scoreboard |
+Some planned work is still tracked in GitHub Issues. This includes better scoring tools, timers, animations, score exports, and a larger Cloudflare data model.
 
-Use the same game code on each view. On the deployed site sync is on by
-default, so no `&sync=` is needed:
+## How a game works
 
-```text
-https://trivia.gogorichie.online/host?game=k7Qm29xRtpLm42&token=<host token>
-https://trivia.gogorichie.online/display?game=k7Qm29xRtpLm42
-https://trivia.gogorichie.online/scoreboard?game=k7Qm29xRtpLm42
-```
+A normal game follows this path:
 
-Use a long random game code. The worker rejects anything under 8 characters.
-The token goes on the host screen only.
+1. The host loads the question file.
+2. The host loads the team file.
+3. The host starts a round.
+4. The audience sees a question.
+5. The host reveals the answer.
+6. The host updates team scores.
+7. The game continues through the remaining rounds.
+8. A tiebreaker is available if needed.
 
-## Game Format
+The current event format supports five rounds with eight questions per round, plus a tiebreaker.
 
-The current plan calls for:
+## Question and team files
 
-- **5 rounds**
-- **8 questions per round**
-- **40 scored questions**
-- **1 tiebreaker**
-- 1 point per normal question
-- Approximately 3 easy, 3 medium, and 2 hard questions per round
-- A halftime break after Round 3
+The host can load CSV or Excel files. The app uses the column headings to decide whether a file contains questions or teams.
 
-See [TRIVIA_NIGHT_GUIDANCE.md](TRIVIA_NIGHT_GUIDANCE.md) for the full event plan and run-of-show.
-
-## Game Data
-
-The host console loads a questions spreadsheet, a team list, or a JSON game
-file through one file picker. Which kind of sheet it is, is worked out from the
-column headings.
-
-Headings are matched loosely, so `Host Notes`, `host_notes` and `HOST-NOTES`
-all resolve, as do `1`, `Round 1`, `R3`, `Tiebreaker` and `TB` in the round
-column. When a required column cannot be found, the import fails and shows the
-headings it actually saw rather than importing a half-built game.
-
-The development fixture is:
-
-```text
-fall-trivia.game.json
-```
-
-Temporary spreadsheet-style development data is stored under:
-
-```text
-mock/questions.csv
-mock/teams.csv
-```
-
-These files are **mock data only**. The final questions and team names will come from spreadsheets supplied for the event.
-
-See [MOCK_DATA.md](MOCK_DATA.md) for the current expected columns.
-
-### Questions
-
-Current mock schema:
+A question file can use columns like:
 
 ```text
 round,category,question,answer,difficulty,points,host_notes
 ```
 
-### Teams
-
-Current mock schema:
+A team file can use:
 
 ```text
 team_name,table_number
 ```
 
-The importer should tolerate reasonable variations in spreadsheet column names when the final files are provided.
+The importer accepts common heading differences. For example, `Host Notes`, `host_notes`, and similar names can be understood.
 
-## Tech Stack
+Files in the `mock/` folder are test data. They are not the final event questions.
 
-| Concern | Choice |
-| --- | --- |
-| Hosting | Cloudflare Pages (`st-peter-trivia`) |
-| Host authentication | Cloudflare Access, scoped to `/host*` |
-| Cross-laptop sync | Cloudflare Workers + Durable Objects |
-| Spreadsheet import | PapaParse + SheetJS, vendored |
-| Unit tests | `node:test` |
-| Browser tests | Playwright |
-| Accessibility | axe-core |
-| Budgets | Lighthouse CI |
-| CI/CD | GitHub Actions |
-| Code scanning | CodeQL (GitHub default setup) |
-| Dependencies | Dependabot |
+See `MOCK_DATA.md` for more details.
 
-No framework and no build step: the host must be able to open a file and have
-it work.
+## Running the app locally
 
-## Cross-Laptop Sync
+You do not need a build step.
 
-The host drives the audience display on a second laptop through a Cloudflare
-Worker. See [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md) for the full setup.
-
-Sync is additive. If the worker is unreachable, every page falls back to local
-storage and behaves as it did before — a sync outage is not a game outage.
-
-Viewer screens have no token, so they cannot change a score; that is enforced
-at the worker. The host console shows a sync badge, and at the T-60 go/no-go
-check it must read **Sync live**.
-
-## Testing
-
-```bash
-npm install
-npm run test:unit    # importer unit tests
-npm run test:e2e     # Playwright browser tests
-npm test             # both
-```
-
-Sync tests need the worker running and skip without it:
-
-```bash
-cd worker && npx wrangler dev --port 8787 --local
-SYNC_URL=http://localhost:8787 npx playwright test tests/e2e/sync.spec.js
-```
-
-## Running Locally
-
-This is currently a static HTML/CSS/JavaScript application, so no build step is required.
-
-For basic testing, serve the repository with a local web server. For example, with Python installed:
+From the project folder, start a basic local web server:
 
 ```bash
 python -m http.server 8000
@@ -195,127 +105,81 @@ Then open:
 http://localhost:8000/
 ```
 
-Opening the HTML files directly may work for basic testing, but a local web server more closely matches how Cloudflare Pages serves it.
+The app can work without Cloudflare sync. In that mode, each laptop uses its own browser storage.
 
-## CI/CD
+## Cross-laptop sync
 
-The workflow is located at:
+The deployed app uses a Cloudflare Worker and Durable Objects to share live game state between laptops.
 
-```text
-.github/workflows/ci-cd.yml
-```
+The host is allowed to change the game. Audience and scoreboard screens are read-only.
 
-On pull requests to `main`, CI:
+If sync stops working, the host can keep using its local copy. The cloud service is an extra feature, not a requirement for basic game play.
 
-1. Verifies required application files.
-2. Validates `fall-trivia.game.json`.
-3. Validates the mock question and team CSV schemas.
-4. Checks important internal page references.
-
-It also runs the importer unit tests, the Playwright browser suite, and
-Lighthouse (accessibility asserted at 100). Dependabot is configured in
-`.github/dependabot.yml`.
-
-CodeQL runs through GitHub's **default setup**, enabled in the repository's
-Security settings rather than by a workflow file. A committed CodeQL workflow
-cannot coexist with it — the analysis is rejected with "CodeQL analyses from
-advanced configurations cannot be processed when the default setup is enabled"
-— so this repository has no `codeql.yml`.
-
-Default setup scans `vendor/`, which holds third-party minified builds. If that
-raises alerts nobody here can act on, exclude the path from
-Security → Code scanning → CodeQL → Configure, rather than by adding a
-workflow.
-
-On successful pushes to `main`, the deploy jobs publish the app to
-**Cloudflare Pages** and the sync worker to **Cloudflare Workers**. They skip
-with a warning until a `CLOUDFLARE_API_TOKEN` repository secret exists; the
-account ID is a plain `env:` value, not a secret. See
-[docs/CLOUDFLARE.md](docs/CLOUDFLARE.md).
-
-The deploy publishes the app shell only. Anything published there is
-world-readable, so question and answer data is deliberately excluded — `mock/`
-holds an answer key, and the real game file would too. The deploy fails if any
-question or answer data reaches the publish directory. The host loads the game
-file from the laptop through the file picker.
-
-## Game-Night Reliability
-
-The application is not the only game-night option. The event plan intentionally includes a no-code fallback:
-
-- PowerPoint or Google Slides for questions and answer reveals
-- Spreadsheet-based scoreboard
-- Printed answer key
-- Paper tally sheet
-
-A go/no-go test should be performed at the venue before the event. If the app is not reliable on both laptops and the church display equipment, use the fallback rather than troubleshooting during the event.
+For setup, deployment, and recovery details, see `docs/CLOUDFLARE.md`.
 
 ## Security
 
-Two locks protect the host console, and they cover different things:
+The host side has two protections:
 
-- **Cloudflare Access** decides who may *open* the page. Scoped to
-  `trivia.gogorichie.online/host*`. Viewer pages stay open deliberately —
-  nobody wants an auth prompt on a TV.
-- **`HOST_TOKEN`** decides who may *change* the game. A Worker secret, compared
-  in constant time, never in this repository.
+- **Cloudflare Access** controls who can open the host page.
+- **HOST_TOKEN** controls who can send game-changing requests to the Worker.
 
-Note that Cloudflare Pages serves `host.html` at both `/host` and `/host.html`.
-An Access rule covering only one of them leaves the other open. If page
-filenames change, re-test by fetching the URLs.
+The token is stored as a Cloudflare secret and is not committed to this repository.
 
-Also:
+Question and answer files are also kept out of the public deployment. The host loads them from the local laptop.
 
-- Use a long random game code; the worker rejects anything under 8 characters.
-- Do not project the host screen or share its URL — the token is in it.
-- Rotate the token and delete the game data after the event.
+## Testing
 
-## Repository Structure
+Install the development packages:
 
-```text
-.
-├── .github/
-│   ├── dependabot.yml
-│   └── workflows/
-│       ├── ci-cd.yml
-│       └── codeql.yml
-├── docs/
-│   └── CLOUDFLARE.md
-├── mock/
-│   ├── questions.csv
-│   └── teams.csv
-├── tests/
-│   ├── import.test.js
-│   └── e2e/
-│       ├── a11y.spec.js
-│       ├── game-flow.spec.js
-│       └── sync.spec.js
-├── vendor/
-│   ├── papaparse.min.js
-│   └── xlsx.full.min.js
-├── worker/
-│   ├── src/index.js
-│   └── wrangler.toml
-├── display.html
-├── fall-trivia.game.json
-├── game.js
-├── host.html
-├── import.js
-├── index.html
-├── lighthouserc.json
-├── MOCK_DATA.md
-├── package.json
-├── playwright.config.js
-├── scoreboard.html
-├── styles.css
-├── sync.js
-└── TRIVIA_NIGHT_GUIDANCE.md
+```bash
+npm install
 ```
 
-## Event
+Run all tests:
+
+```bash
+npm test
+```
+
+You can also run them separately:
+
+```bash
+npm run test:unit
+npm run test:e2e
+```
+
+The browser tests check important game behavior such as importing files, moving from question to answer, scoring teams, refreshing the browser, and keeping answers hidden until the host reveals them.
+
+Cross-laptop sync tests use a local Cloudflare Worker and are documented in `docs/CLOUDFLARE.md`.
+
+## Main project files
+
+| File or folder | Purpose |
+| --- | --- |
+| `host.html` | Host controls |
+| `display.html` | Audience screen |
+| `scoreboard.html` | Scoreboard |
+| `game.js` | Shared game and local-state logic |
+| `import.js` | Question and team file import |
+| `sync.js` | Optional cross-laptop sync |
+| `worker/` | Cloudflare sync Worker |
+| `tests/` | Automated tests |
+| `mock/` | Development question and team files |
+| `docs/CLOUDFLARE.md` | Cloudflare setup and operations |
+| `TRIVIA_NIGHT_GUIDANCE.md` | Event and game-night guidance |
+| `AGENTS.md` | Instructions for AI coding agents |
+
+## Game-night backup
+
+The web app is not the only way to run the event. A backup plan can use slides for questions, a spreadsheet for scores, a printed answer key, and a paper tally sheet.
+
+This is intentional. A trivia night should not stop because a web service or Wi-Fi connection has a problem.
+
+## Church
 
 **St. Peter Evangelical Lutheran Church**  
 985 Galligan Road  
 Gilberts, IL 60136
 
-Game night: **Saturday, September 19, 2026**
+Original game night: **September 19, 2026**
