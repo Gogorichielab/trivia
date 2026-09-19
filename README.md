@@ -17,23 +17,28 @@ Implemented:
 - Next/Back game navigation
 - Round, question, answer reveal, and tiebreaker states
 - JSON game-file loading
+- **Spreadsheet import for questions and teams (.csv, .xlsx)**
+- **Cross-laptop synchronisation via Cloudflare Workers (optional)**
+- **Read-only audience screens, enforced at the worker**
 - Mock question and team datasets
 - Large-format TV/projector styling
+- **Unit tests for the importer and Playwright browser tests for the game flow**
+- **Accessibility checks (axe-core) and Lighthouse budgets**
 - GitHub Actions CI/CD pipeline
 - GitHub Pages deployment workflow
+- **CodeQL scanning and Dependabot updates**
 
 Still planned:
 
-- Cross-laptop Firebase synchronization
-- Spreadsheet import for the final questions
-- Spreadsheet import for the final team list
-- Host authentication and locked-down Firebase rules
+- Host authentication (Cloudflare Access needs a domain; see below)
 - Timer
 - Improved score-entry workflow
 - Animations/transitions
 - Download/export scores
 
-> The current MVP uses browser local storage. Cross-laptop synchronization is not yet complete.
+> The app runs on one laptop with no accounts at all. Cross-laptop sync is
+> optional: if the worker is not configured or cannot be reached, every page
+> falls back to local storage and behaves as it did before.
 
 ## App Pages
 
@@ -70,7 +75,14 @@ See [TRIVIA_NIGHT_GUIDANCE.md](TRIVIA_NIGHT_GUIDANCE.md) for the full event plan
 
 ## Game Data
 
-The application can load a JSON game file.
+The host console loads a questions spreadsheet, a team list, or a JSON game
+file through one file picker. Which kind of sheet it is, is worked out from the
+column headings.
+
+Headings are matched loosely, so `Host Notes`, `host_notes` and `HOST-NOTES`
+all resolve, as do `1`, `Round 1`, `R3`, `Tiebreaker` and `TB` in the round
+column. When a required column cannot be found, the import fails and shows the
+headings it actually saw rather than importing a half-built game.
 
 The development fixture is:
 
@@ -107,6 +119,39 @@ team_name,table_number
 
 The importer should tolerate reasonable variations in spreadsheet column names when the final files are provided.
 
+## Cross-Laptop Sync
+
+Optional, and off unless configured. See [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md)
+for deployment, the host token, and why Cloudflare Access is not usable without
+a domain.
+
+```text
+host.html?game=<code>&sync=https://<worker>.workers.dev&token=<host token>
+display.html?game=<code>&sync=https://<worker>.workers.dev
+```
+
+The token goes on the host screen only. Viewer screens have nothing to send, so
+they cannot change a score.
+
+The host console shows a sync badge; at the T-60 go/no-go check it must read
+**Sync live**.
+
+## Testing
+
+```bash
+npm install
+npm run test:unit    # importer unit tests
+npm run test:e2e     # Playwright browser tests
+npm test             # both
+```
+
+Sync tests need the worker running and skip without it:
+
+```bash
+cd worker && npx wrangler dev --port 8787 --local
+SYNC_URL=http://localhost:8787 npx playwright test tests/e2e/sync.spec.js
+```
+
 ## Running Locally
 
 This is currently a static HTML/CSS/JavaScript application, so no build step is required.
@@ -140,7 +185,17 @@ On pull requests to `main`, CI:
 3. Validates the mock question and team CSV schemas.
 4. Checks important internal page references.
 
-On successful pushes to `main`, the deployment job publishes the static site to **GitHub Pages**.
+It also runs the importer unit tests, the Playwright browser suite, and
+Lighthouse (accessibility asserted at 100). CodeQL scanning and Dependabot are
+configured separately under `.github/`.
+
+On successful pushes to `main`, the deployment job publishes to **GitHub Pages**.
+
+The deploy publishes the app shell only. Anything published there is
+world-readable, so question and answer data is deliberately excluded — `mock/`
+holds an answer key, and the real game file would too. The deploy fails if any
+question or answer data reaches the publish directory. The host loads the game
+file from the laptop through the file picker.
 
 GitHub Pages must be configured to use **GitHub Actions** as its deployment source.
 
@@ -171,19 +226,40 @@ When Firebase synchronization is added:
 ```text
 .
 ├── .github/
+│   ├── dependabot.yml
 │   └── workflows/
-│       └── ci-cd.yml
+│       ├── ci-cd.yml
+│       └── codeql.yml
+├── docs/
+│   └── CLOUDFLARE.md
 ├── mock/
 │   ├── questions.csv
 │   └── teams.csv
+├── tests/
+│   ├── import.test.js
+│   └── e2e/
+│       ├── a11y.spec.js
+│       ├── game-flow.spec.js
+│       └── sync.spec.js
+├── vendor/
+│   ├── papaparse.min.js
+│   └── xlsx.full.min.js
+├── worker/
+│   ├── src/index.js
+│   └── wrangler.toml
 ├── display.html
 ├── fall-trivia.game.json
 ├── game.js
 ├── host.html
+├── import.js
 ├── index.html
+├── lighthouserc.json
 ├── MOCK_DATA.md
+├── package.json
+├── playwright.config.js
 ├── scoreboard.html
 ├── styles.css
+├── sync.js
 └── TRIVIA_NIGHT_GUIDANCE.md
 ```
 
