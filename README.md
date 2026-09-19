@@ -229,8 +229,9 @@ workflow.
 
 On successful pushes to `main`, the deploy jobs publish the app to
 **Cloudflare Pages** and the sync worker to **Cloudflare Workers**. They skip
-with a warning until `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` exist
-as repository secrets.
+with a warning until a `CLOUDFLARE_API_TOKEN` repository secret exists; the
+account ID is a plain `env:` value, not a secret. See
+[docs/CLOUDFLARE.md](docs/CLOUDFLARE.md).
 
 The deploy publishes the app shell only. Anything published there is
 world-readable, so question and answer data is deliberately excluded — `mock/`

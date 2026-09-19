@@ -195,9 +195,11 @@ suite off the production worker.
 the repository, never a `[vars]` entry, and never in a commit. The worker
 refuses all writes when it is unset rather than accepting anonymous ones.
 
-Deploys from CI need `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as
-GitHub repository secrets. The deploy jobs skip with a warning when they are
-absent rather than failing the build.
+Deploys from CI need one GitHub repository secret, `CLOUDFLARE_API_TOKEN`,
+scoped to Cloudflare Pages: Edit and Workers Scripts: Edit. The account ID is
+an identifier rather than a credential and is a plain `env:` value in the
+workflow. The deploy jobs skip with a warning when the token is absent rather
+than failing the build.
 
 ## Display Requirements
 

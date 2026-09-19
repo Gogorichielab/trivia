@@ -166,16 +166,41 @@ accepting anonymous ones. Set the secret before the event.
 
 ### Automatic deploys from CI
 
-The `deploy` and `deploy-worker` jobs skip with a warning until two GitHub
-repository secrets exist (Settings → Secrets and variables → Actions):
+The `deploy` and `deploy-worker` jobs skip with a warning until **one** GitHub
+repository secret exists:
 
 | Secret | Value |
 | --- | --- |
-| `CLOUDFLARE_ACCOUNT_ID` | `5ea902cfe05440351866b1a0f0535407` |
 | `CLOUDFLARE_API_TOKEN` | A token with **Cloudflare Pages: Edit** and **Workers Scripts: Edit** |
 
-Create the token at My Profile → API Tokens → Create Token → Custom token.
-Scope it to this account and those two permissions only.
+The account ID is not a secret — it is a plain `env:` value in
+`.github/workflows/ci-cd.yml`, and it appears in this document too.
+
+### Creating the token
+
+1. Cloudflare dashboard → **My Profile** → **API Tokens** → **Create Token**.
+2. Choose **Create Custom Token**.
+3. Name it something like `st-peter-trivia deploys`.
+4. Permissions — add exactly these two, and nothing else:
+   - `Account` · `Cloudflare Pages` · **Edit**
+   - `Account` · `Workers Scripts` · **Edit**
+5. Account Resources: **Include** → `Richard@gogorichie.com's Account`.
+6. Optionally set a TTL. A token that expires is one less thing to remember.
+7. **Continue to summary** → **Create Token**, then copy the value — Cloudflare
+   shows it once.
+
+### Storing it
+
+GitHub → the repository → **Settings** → **Secrets and variables** →
+**Actions** → **New repository secret**.
+
+- Name: `CLOUDFLARE_API_TOKEN`
+- Secret: the token value
+
+### Checking it worked
+
+Actions → **CI/CD** → **Run workflow** on `main`. The deploy jobs should run
+rather than logging "CLOUDFLARE_API_TOKEN is not set; skipping deploy".
 
 ---
 
