@@ -8,3 +8,20 @@
 .badge.connecting{background:#1e293b;border-color:#fbbf24;color:#fde68a}
 .badge.live{background:#082f20;border-color:#34d399;color:#d1fae5}
 .badge.offline,.badge.error{background:#3f1414;border-color:#f87171;color:#fee2e2}
+
+/* Optional question countdown. The state word or the number carries the
+   meaning; colour only reinforces it, per AGENTS.md on not relying on hue. */
+.timerpanel{background:#1e293b;padding:14px 18px;border-radius:12px;margin:20px 0}
+.timerpanel h2{margin:0 0 .2em}
+.timerreadout{font-size:2.6rem;font-weight:800;margin:.1em 0;font-variant-numeric:tabular-nums}
+.timerreadout.running{color:#d1fae5}
+.timerreadout.warning{color:#fde68a}
+.timerreadout.expired{color:#fecaca}
+.timerreadout.paused,.timerreadout.none{color:#cbd5e1}
+/* Sits below the centred question rather than over it, and stays readable
+   from the back of the hall on the 1920x1080 TV. */
+.timerbar{position:fixed;left:50%;transform:translateX(-50%);bottom:3vh;padding:.1em .6em;border-radius:18px;border:3px solid;font-size:clamp(40px,6vw,110px);font-weight:800;font-variant-numeric:tabular-nums;line-height:1.25}
+.timerbar.running{background:#082f20;border-color:#34d399;color:#d1fae5}
+.timerbar.warning{background:#1e293b;border-color:#fbbf24;color:#fde68a}
+.timerbar.expired{background:#3f1414;border-color:#f87171;color:#fee2e2}
+.timerbar.paused{background:#1e293b;border-color:#94a3b8;color:#e2e8f0}

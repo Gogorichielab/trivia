@@ -42,6 +42,7 @@ The project currently includes:
 - A ranked scoreboard.
 - CSV and Excel imports for questions and teams.
 - Five-round games and a tiebreaker.
+- An optional 45-second countdown for each question, off unless you ask for it.
 - Local browser storage for game state.
 - Optional cross-laptop sync using Cloudflare Workers and Durable Objects.
 - Cloudflare Access protection for the host page.
@@ -50,7 +51,31 @@ The project currently includes:
 - GitHub Actions for testing and deployment.
 - CodeQL security scanning and Dependabot updates.
 
-Some planned work is still tracked in GitHub Issues. This includes better scoring tools, timers, animations, score exports, and a larger Cloudflare data model.
+Some planned work is still tracked in GitHub Issues. This includes better scoring tools, animations, score exports, and a larger Cloudflare data model.
+
+### Question timer
+
+The timer is off by default. A whole game can be run without it.
+
+To switch it on, add `&timer=45` to the host address:
+
+```
+host.html?game=k7Qm29xRtp&timer=45
+```
+
+The number is how many seconds each question gets. Use `&timer=0` to turn it
+off again.
+
+Once it is on:
+
+- Every question starts its own countdown. Round cards and answers do not.
+- The audience screen shows the time left. It needs no address of its own.
+- The host can restart, pause, or clear the timer at any point.
+- The timer never moves the game along. When it runs out it says "Time's up"
+  and waits for you. Next and Back keep working the whole time.
+
+To keep one screen clear while others show the countdown, add `&timer=0` to
+that screen's address.
 
 ## How a game works
 
@@ -163,6 +188,7 @@ Cross-laptop sync tests use a local Cloudflare Worker and are documented in `doc
 | `scoreboard.html` | Scoreboard |
 | `game.js` | Shared game and local-state logic |
 | `import.js` | Question and team file import |
+| `timer.js` | Optional question countdown |
 | `sync.js` | Optional cross-laptop sync |
 | `worker/` | Cloudflare sync Worker |
 | `tests/` | Automated tests |
