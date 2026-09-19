@@ -28,7 +28,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for file in index.html host.html display.html scoreboard.html styles.css game.js fall-trivia.game.json; do
+          for file in index.html host.html display.html scoreboard.html styles.css game.js import.js fall-trivia.game.json vendor/papaparse.min.js vendor/xlsx.full.min.js; do
             test -s "$file" || { echo "::error file=$file::Missing or empty required file"; exit 1; }
           done
 
@@ -67,10 +67,93 @@ jobs:
           grep -q 'display.html' index.html
           grep -q 'scoreboard.html' index.html
 
+      # The old checks confirmed the game file parsed, which a file holding
+      # five placeholder questions does. Warn when the fixture is not real
+      # content, so a deploy cannot quietly ship placeholders to the TV.
+      - name: Warn on placeholder game content
+        shell: python
+        run: |
+          import json, os
+          from pathlib import Path
+
+          game = json.loads(Path("fall-trivia.game.json").read_text())
+          rounds = game.get("rounds", [])
+          counts = [len(r.get("questions", [])) for r in rounds]
+          text = json.dumps(game).lower()
+
+          notes = []
+          if "placeholder" in text:
+              notes.append("contains the word 'placeholder'")
+          thin = [i + 1 for i, n in enumerate(counts) if n < 8]
+          if thin:
+              notes.append(f"rounds {thin} have fewer than 8 questions (counts: {counts})")
+
+          if notes:
+              print("::warning file=fall-trivia.game.json::Development fixture, not event content: "
+                    + "; ".join(notes))
+          else:
+              print(f"fall-trivia.game.json: {len(rounds)} rounds, {sum(counts)} questions")
+
+  test:
+    name: Unit and browser tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run importer unit tests
+        run: npm run test:unit
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run browser tests
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  lighthouse:
+    name: Lighthouse
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run Lighthouse CI
+        run: npx --yes @lhci/cli@0.14.x autorun
+
+      - name: Upload Lighthouse report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-report
+          path: .lighthouseci/
+          retention-days: 7
+
   deploy:
     name: Deploy GitHub Pages
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: validate
+    needs: [validate, test, lighthouse]
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -82,10 +165,34 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
+      # Publish the app shell only. Anything published here is world-readable,
+      # so question and answer data stays out of it: mock/ holds an answer key,
+      # and fall-trivia.game.json would hold the real one. The host loads the
+      # game file from the laptop through the file picker instead.
+      - name: Assemble site
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf _site && mkdir -p _site
+          cp index.html host.html display.html scoreboard.html styles.css game.js import.js _site/
+          cp -r vendor _site/vendor
+          echo "Publishing:"
+          find _site -type f | sort
+
+      - name: Verify no answer data is being published
+        shell: bash
+        run: |
+          set -euo pipefail
+          if find _site -name '*.csv' -o -name '*.game.json' | grep -q .; then
+            echo "::error::Question or answer data found in the publish directory"
+            exit 1
+          fi
+          echo "No question or answer data in _site."
+
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
 
       - name: Deploy to GitHub Pages
         id: deployment
