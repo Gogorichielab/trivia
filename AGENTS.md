@@ -337,6 +337,134 @@ a CodeQL workflow file: an advanced configuration cannot coexist with default
 setup, and the analysis fails with "CodeQL analyses from advanced configurations
 cannot be processed when the default setup is enabled".
 
+## General Application Development Guidance
+
+These rules apply to all application work in this repository, not only event-critical changes.
+
+### Work from the backlog
+
+- Every non-trivial change should map to a GitHub **Feature**, **Task**, or **Bug**.
+- Features describe a user-facing or architectural capability; Tasks are discrete implementation work; Bugs describe accepted behavior that is broken.
+- When a Task belongs to a Feature, keep that relationship explicit in GitHub and in the issue description until native sub-issue relationships are available.
+- Read the issue and its acceptance criteria before coding. Do not silently expand scope.
+- If implementation uncovers unrelated work, create or recommend a separate Task/Bug instead of folding it into the current change.
+
+### Design and implementation
+
+- Prefer the smallest design that satisfies the acceptance criteria and preserves existing behavior.
+- Keep UI, domain/state logic, persistence, and external-service integration separated enough to test independently.
+- Treat D1 as durable relational state, R2 as object/media storage, and KV only as optional low-write/read-heavy configuration or cache. Do not use a storage service merely because it exists.
+- Keep Cloudflare-specific code behind clear boundaries so core game behavior can be exercised locally.
+- Preserve graceful degradation. A temporary network or sync failure must not unnecessarily make the local host unusable.
+- Validate all data at trust boundaries: spreadsheet imports, query parameters, API requests, persisted records, and external responses.
+- Escape untrusted content before inserting it into HTML.
+- Never expose secrets, tokens, private keys, or privileged backend bindings to browser code.
+- Prefer accessible semantic HTML and keyboard-operable controls. Do not rely on color alone.
+- Avoid premature abstraction. Extract shared behavior when duplication is meaningful, not merely because two lines look similar.
+- Delete dead code when replacing behavior; do not leave parallel implementations without a documented migration reason.
+
+### API and data changes
+
+- Define request/response shapes and failure behavior before adding a new API endpoint.
+- Return useful, non-sensitive errors. Never leak credentials, stack traces, or internal bindings to users.
+- Make destructive operations explicit and require confirmation where appropriate.
+- Use versioned D1 migrations for schema changes. Do not edit deployed schema manually as the normal workflow.
+- Prefer backward-compatible changes when clients may be running on multiple devices during an event.
+- Keep authoritative totals derivable from auditable score data where practical rather than storing only an opaque mutable total.
+
+### Testing and quality
+
+- Add or update tests for changed behavior.
+- Bugs should receive a regression test whenever practical.
+- Test both the success path and important failure/recovery paths.
+- Run the narrowest relevant tests while developing, then the full required suite before merging.
+- Do not weaken assertions, disable checks, or hide errors merely to make CI pass.
+- Treat lint/static-analysis/security findings as engineering feedback; fix or explicitly document legitimate exceptions.
+- Verify user-facing changes in a real browser at the intended viewport in addition to automated tests.
+
+### Pull requests and reviews
+
+- Keep changes focused enough to review and revert independently.
+- PR descriptions should explain **what changed, why, how it was tested, and any deployment/migration impact**.
+- Link the Feature/Task/Bug being implemented.
+- Call out D1 migrations, Cloudflare binding changes, secrets/configuration requirements, and rollback considerations.
+- Do not mix unrelated cleanup with feature or bug work unless the cleanup is required for the change.
+
+## Conventional Commits
+
+All commit messages must follow **Conventional Commits**.
+
+### Format
+
+```text
+<type>(optional-scope): <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+Use an imperative, concise description. Keep the subject focused on the change, not the implementation process.
+
+### Allowed types
+
+- `feat` — a new user-facing or architectural capability.
+- `fix` — a bug fix.
+- `refactor` — code restructuring with no intended behavior change.
+- `perf` — a performance improvement.
+- `test` — adding or correcting tests.
+- `docs` — documentation-only changes.
+- `build` — build system, dependencies, or packaging changes.
+- `ci` — CI/CD workflow changes.
+- `chore` — maintenance that does not fit another type.
+- `style` — formatting-only changes with no behavior change.
+- `revert` — reverting a previous commit.
+
+Prefer a useful scope when it improves clarity, such as `host`, `display`, `scoreboard`, `sync`, `worker`, `d1`, `r2`, `import`, or `ci`.
+
+### Examples
+
+```text
+feat(import): add team spreadsheet validation
+fix(sync): restore current state after reconnect
+refactor(scoring): separate round totals from rendering
+test(display): prevent answers from appearing before reveal
+ci(deploy): publish Worker after validation passes
+docs: document Cloudflare development workflow
+```
+
+### Breaking changes
+
+Use `!` and a `BREAKING CHANGE:` footer when a change intentionally breaks an existing interface, data format, deployment contract, or API.
+
+```text
+feat(api)!: replace legacy game-state endpoint
+
+BREAKING CHANGE: clients must use /api/games/:id/state.
+```
+
+Breaking changes require an explicit migration and rollback plan.
+
+### Issue references
+
+When a commit implements or fixes tracked work, reference the issue in the footer when useful:
+
+```text
+feat(d1): persist round score entries
+
+Refs #15
+```
+
+Use `Closes #123` only when that single commit/PR actually completes the issue. Do not close a Feature when only one of its Tasks is complete.
+
+### Commit hygiene
+
+- One logical change per commit.
+- Do not use vague subjects such as `updates`, `fix stuff`, `changes`, or `WIP` on shared branches.
+- Do not bundle formatting, dependency upgrades, and behavior changes into one commit unless inseparable.
+- Never mention or include secrets in a commit message.
+- A commit should be safe to revert without unintentionally removing unrelated work.
+
 ## Change Strategy
 
 Because this is a live-event application with a short deadline:
