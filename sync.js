@@ -86,7 +86,7 @@
     const localSave = window.saveState;
     window.saveState = function (state) {
       localSave(state);
-      const body = JSON.stringify({ index: state.index, teams: state.teams, game: loadGame() });
+      const body = JSON.stringify({ index: state.index, teams: state.teams, timer: state.timer || null, game: loadGame() });
       fetch(base, {
         method: "POST",
         headers: { "content-type": "application/json", "x-host-token": token },
@@ -115,7 +115,10 @@
       // The host is authoritative for its own screen; it posts, it does not
       // take state back from the worker. Viewers follow.
       if (!token) {
-        localStorage.setItem(gameKey(), JSON.stringify({ index: state.index, teams: state.teams || [] }));
+        localStorage.setItem(
+          gameKey(),
+          JSON.stringify({ index: state.index, teams: state.teams || [], timer: state.timer || null })
+        );
         if (state.game) localStorage.setItem(gameKey() + ":game", JSON.stringify(state.game));
         if (typeof window.render === "function") window.render();
         else if (state.index !== local.index) location.reload();

@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for file in index.html host.html display.html scoreboard.html styles.css game.js import.js fall-trivia.game.json vendor/papaparse.min.js vendor/xlsx.full.min.js; do
+          for file in index.html host.html display.html scoreboard.html styles.css game.js import.js timer.js fall-trivia.game.json vendor/papaparse.min.js vendor/xlsx.full.min.js; do
             test -s "$file" || { echo "::error file=$file::Missing or empty required file"; exit 1; }
           done
 
@@ -174,7 +174,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf _site && mkdir -p _site
-          cp index.html host.html display.html scoreboard.html styles.css game.js import.js sync.js _site/
+          cp index.html host.html display.html scoreboard.html styles.css game.js import.js timer.js sync.js _site/
           cp -r vendor _site/vendor
           echo "Publishing:"
           find _site -type f | sort

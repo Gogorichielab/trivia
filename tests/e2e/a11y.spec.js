@@ -76,3 +76,31 @@ test("scoreboard has no accessibility violations", async ({ browser }) => {
   expect(violations, `\n  ${describe(violations)}`).toEqual([]);
   await context.close();
 });
+
+test("the audience display stays accessible with a countdown on screen", async ({ browser }) => {
+  const code = newGame();
+  const context = await browser.newContext();
+  const host = await context.newPage();
+  await host.goto(`/host.html?game=${code}&timer=45`);
+  await host.setInputFiles("#file", QUESTIONS);
+  await expect(host.locator("#importLog")).toBeVisible();
+  await host.getByRole("button", { name: "Next" }).click();
+
+  const display = await context.newPage();
+  await display.goto(`/display.html?game=${code}`);
+  await expect(display.locator("#timerBar")).toBeVisible({ timeout: 5000 });
+
+  const violations = await scan(display);
+  expect(violations, `\n  ${describe(violations)}`).toEqual([]);
+  await context.close();
+});
+
+test("the host console stays accessible with the timer panel on", async ({ page }) => {
+  await page.goto(`/host.html?game=${newGame()}&timer=45`);
+  await page.setInputFiles("#file", QUESTIONS);
+  await expect(page.locator("#importLog")).toBeVisible();
+  await expect(page.locator("#timerPanel")).toBeVisible();
+
+  const violations = await scan(page);
+  expect(violations, `\n  ${describe(violations)}`).toEqual([]);
+});

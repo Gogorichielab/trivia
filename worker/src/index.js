@@ -51,7 +51,7 @@ export class GameRoom {
 
   async load() {
     if (this.cached === undefined) {
-      this.cached = (await this.state.storage.get("game")) || { index: 0, teams: [], game: null, rev: 0 };
+      this.cached = (await this.state.storage.get("game")) || { index: 0, teams: [], timer: null, game: null, rev: 0 };
     }
     return this.cached;
   }
@@ -114,6 +114,9 @@ export class GameRoom {
       const next = {
         index: Number.isInteger(incoming.index) ? incoming.index : current.index,
         teams: Array.isArray(incoming.teams) ? incoming.teams : current.teams,
+        // Optional countdown. Stored and relayed as sent; the worker has no
+        // opinion about it beyond keeping every screen on the same one.
+        timer: incoming.timer === undefined ? current.timer || null : incoming.timer,
         game: incoming.game === undefined ? current.game : incoming.game,
         rev: (current.rev || 0) + 1,
         updatedAt: new Date().toISOString(),
