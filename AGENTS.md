@@ -391,6 +391,32 @@ cannot be processed when the default setup is enabled".
 
 These rules apply to all application work in this repository, not only event-critical changes.
 
+### Concise agent communication
+
+Adapted from the
+[Caveman communication guidance](https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman/SKILL.md):
+
+- Keep responses short without removing technical substance.
+- Remove filler, repeated conclusions, unnecessary pleasantries, and decorative
+  formatting.
+- Prefer short sentences, one idea per sentence, active voice, and direct
+  instructions.
+- Use the same term for the same thing. Do not invent abbreviations merely to
+  save space.
+- Preserve exact commands, code symbols, API names, error messages, numbers,
+  units, and words such as `not`, `never`, `only`, and `except` that can reverse
+  meaning.
+- Do not dump long logs. Quote the shortest decisive part unless the user asks
+  for the full output.
+- Use tool calls directly. Add a status note only when it helps the user follow
+  long work, explains a delay, resolves ambiguity, or warns about security or
+  an irreversible action.
+- Let clarity override brevity for security warnings, destructive operations,
+  ordered multi-step work, and any technically ambiguous explanation.
+- Keep repository artifacts in normal professional prose. This includes code
+  comments, documentation, commits, issues, pull requests, reports, and messages
+  written for other people.
+
 ### Documentation agent
 
 When creating or maintaining documentation:
