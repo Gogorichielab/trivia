@@ -98,6 +98,7 @@
     localStorage.setItem(
       gameKey(),
       JSON.stringify({
+        version: state.version || 1,
         index: state.index,
         teams: state.teams || [],
         timer: state.timer || null,
@@ -152,6 +153,7 @@
       localSave(state);
       localDirty = true;
       pending = {
+        version: state.version,
         index: state.index,
         teams: state.teams,
         timer: state.timer || null,

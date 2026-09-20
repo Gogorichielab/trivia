@@ -36,10 +36,11 @@ The project uses plain HTML, CSS, and JavaScript. There is no web framework or b
 
 The project currently includes:
 
-- Host controls with Previous and Next buttons.
-- Question and answer reveal screens.
-- Team creation and score changes.
-- A ranked scoreboard.
+- Host controls that name the next game step.
+- Separate question and answer-review phases.
+- Round-by-round score entry with automatic totals.
+- A ranked scoreboard that preserves ties.
+- Final results and a downloadable CSV report.
 - CSV and Excel imports for questions and teams.
 - Five-round games and a tiebreaker.
 - An optional 45-second countdown for each question, off unless you ask for it.
@@ -51,7 +52,8 @@ The project currently includes:
 - GitHub Actions for testing and deployment.
 - CodeQL security scanning and Dependabot updates.
 
-Some planned work is still tracked in GitHub Issues. This includes better scoring tools, animations, score exports, and a larger Cloudflare data model.
+Short presentation transitions are included and turn off automatically when a
+device requests reduced motion.
 
 ### Question timer
 
@@ -81,14 +83,15 @@ that screen's address.
 
 A normal game follows this path:
 
-1. The host loads the question file.
-2. The host loads the team file.
-3. The host starts a round.
-4. The audience sees a question.
-5. The host reveals the answer.
-6. The host updates team scores.
-7. The game continues through the remaining rounds.
-8. A tiebreaker is available if needed.
+1. The host loads the question and team files.
+2. The lobby stays on screen until everyone is ready.
+3. The host shows the round title and every question.
+4. After answer sheets are collected, the host reviews every answer.
+5. The host enters one score per team for that round.
+6. The game continues through the remaining rounds.
+7. A tiebreaker question and answer are available.
+8. The final-results screen announces the winner or tied winners.
+9. The host downloads a CSV file with every round score and total.
 
 The current event format supports five rounds with eight questions per round, plus a tiebreaker.
 
@@ -134,11 +137,15 @@ The app can work without Cloudflare sync. In that mode, each laptop uses its own
 
 ## Cross-laptop sync
 
-The deployed app uses a Cloudflare Worker and Durable Objects to share live game state between laptops.
+The deployed app uses a Cloudflare Worker and Durable Objects to share live
+game state between laptops. The saved state includes the current step, loaded
+game, teams, table numbers, round scores, adjustments, totals, and timer.
 
 The host is allowed to change the game. Audience and scoreboard screens are read-only.
 
-If sync stops working, the host can keep using its local copy. The cloud service is an extra feature, not a requirement for basic game play.
+If sync stops working, the host keeps using its local copy and retries the
+newest complete state. A fresh host browser restores the authoritative Durable
+Object state before it makes changes.
 
 For setup, deployment, and recovery details, see `docs/CLOUDFLARE.md`.
 That file also explains how to roll back a bad deploy, for both the app and the Worker.

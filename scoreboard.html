@@ -1,1 +1,35 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Scoreboard | St. Peter Trivia</title><link rel="stylesheet" href="styles.css"></head><body><main class="stage"><div class="board"><h1>Scoreboard</h1><div id="board"></div></div></main><script src="game.js"></script><script src="sync.js"></script><script>function render(){const s=loadState(),a=[...s.teams].sort((a,b)=>b.score-a.score);board.innerHTML=a.map((t,i)=>'<div class="row"><b>'+(i+1)+'</b><span>'+esc(t.name)+'</span><b>'+esc(t.score)+'</b></div>').join("")||"<h2>Waiting for teams…</h2>"}render();setInterval(render,1000)</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Scoreboard | St. Peter Trivia</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="stage">
+    <div class="board">
+      <h1>Scoreboard</h1>
+      <div id="board"></div>
+    </div>
+  </main>
+  <script src="game.js"></script>
+  <script src="sync.js"></script>
+  <script>
+    let lastBoard = "";
+    function render() {
+      const ranked = rankTeams(loadState().teams);
+      const html = ranked.map((team) =>
+        `<div class="row"><b>${team.rank}</b><span>${esc(team.name)}</span><b>${esc(team.score)}</b></div>`
+      ).join("") || "<h2>Waiting for teams…</h2>";
+      if (html === lastBoard) return;
+      lastBoard = html;
+      board.innerHTML = html;
+      board.classList.remove("screen-change");
+      requestAnimationFrame(() => board.classList.add("screen-change"));
+    }
+    render();
+    setInterval(render, 1000);
+  </script>
+</body>
+</html>

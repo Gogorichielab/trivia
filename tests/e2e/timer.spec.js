@@ -18,7 +18,8 @@ async function hostOnFirstQuestion(page, code, query = "&timer=45") {
   await page.goto(`/host.html?game=${code}${query}`);
   await page.setInputFiles("#file", QUESTIONS);
   await expect(page.locator("#importLog")).toBeVisible();
-  await page.getByRole("button", { name: "Next" }).click(); // round card -> question
+  await page.locator("#nextButton").click(); // lobby -> round card
+  await page.locator("#nextButton").click(); // round card -> question
   await expect(page.locator("#current")).toContainText("QUESTION");
 }
 
@@ -130,9 +131,9 @@ test("the timer never blocks navigation, even after it runs out", async ({ brows
   await expect(display.locator("#timerBar")).toHaveText("Time's up", { timeout: 5000 });
 
   // The host is still in charge of where the game goes.
-  await host.getByRole("button", { name: "Next" }).click();
-  await expect(host.locator("#current")).toContainText("ANSWER");
-  await expect(display.locator("#stage")).toContainText("Jupiter", { timeout: 5000 });
+  await host.locator("#nextButton").click();
+  await expect(host.locator("#current")).toContainText("QUESTION 2");
+  await expect(display.locator("#stage")).not.toContainText("Jupiter");
 
   await host.getByRole("button", { name: "Back" }).click();
   await expect(host.locator("#current")).toContainText("QUESTION");
@@ -140,7 +141,7 @@ test("the timer never blocks navigation, even after it runs out", async ({ brows
   await context.close();
 });
 
-test("each question gets a fresh countdown; answers and round cards get none", async ({ browser }) => {
+test("each question gets a fresh countdown and answer review gets none", async ({ browser }) => {
   const code = newGame();
   const context = await browser.newContext();
   const host = await context.newPage();
@@ -151,16 +152,16 @@ test("each question gets a fresh countdown; answers and round cards get none", a
   const bar = display.locator("#timerBar");
   await expect(bar).toBeVisible({ timeout: 5000 });
 
-  // Revealing the answer is not a timed moment.
-  await host.getByRole("button", { name: "Next" }).click();
-  await expect(host.locator("#current")).toContainText("ANSWER");
-  await expect(bar).toBeHidden({ timeout: 5000 });
-
   // The next question starts over at the full 45, not where the last left off.
-  await host.getByRole("button", { name: "Next" }).click();
-  await expect(host.locator("#current")).toContainText("QUESTION");
+  await host.locator("#nextButton").click();
+  await expect(host.locator("#current")).toContainText("QUESTION 2");
   await expect(bar).toBeVisible({ timeout: 5000 });
   await expect(bar).toHaveText(/^0:4[45]$/);
+
+  // After all eight questions, answer review is not a timed moment.
+  for (let i = 0; i < 7; i++) await host.locator("#nextButton").click();
+  await expect(host.locator("#current")).toContainText("ANSWER 1");
+  await expect(bar).toBeHidden({ timeout: 5000 });
 
   await context.close();
 });

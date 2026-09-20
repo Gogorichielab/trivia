@@ -49,7 +49,8 @@ test("audience display has no accessibility violations", async ({ browser }) => 
   await host.goto(`/host.html?game=${code}`);
   await host.setInputFiles("#file", QUESTIONS);
   await expect(host.locator("#importLog")).toBeVisible();
-  await host.getByRole("button", { name: "Next" }).click();
+  await host.locator("#nextButton").click();
+  await host.locator("#nextButton").click();
 
   const display = await context.newPage();
   await display.goto(`/display.html?game=${code}`);
@@ -84,7 +85,8 @@ test("the audience display stays accessible with a countdown on screen", async (
   await host.goto(`/host.html?game=${code}&timer=45`);
   await host.setInputFiles("#file", QUESTIONS);
   await expect(host.locator("#importLog")).toBeVisible();
-  await host.getByRole("button", { name: "Next" }).click();
+  await host.locator("#nextButton").click();
+  await host.locator("#nextButton").click();
 
   const display = await context.newPage();
   await display.goto(`/display.html?game=${code}`);
