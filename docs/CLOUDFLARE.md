@@ -74,10 +74,19 @@ outstanding. Until step 5, the live site is served by the old pair.
    ```
 
    If `hostTokenSet` is `false`, stop. The new worker would refuse every write.
-4. **Move the sync hostname.** Workers & Pages → `st-peter-trivia-sync` →
-   Settings → Domains & Routes → remove `trivia-sync.gogorichie.online`. Then
-   add the same hostname to `trivia-sync`. Expect a few seconds where sync is
-   unavailable; the host keeps its local copy throughout.
+4. **Move the sync hostname.** Workers & Pages → `trivia-sync` → Settings →
+   Domains & Routes → add `trivia-sync.gogorichie.online`, and accept the
+   prompt to take it over from the other Worker. Do **not** remove it from the
+   old Worker first: reassigning in place is atomic, so sync never goes down.
+
+   The API refuses a plain reassign with `100116: Hostname already in use`
+   and names the fix — `override_existing_origin: true` on
+   `PUT /accounts/<id>/workers/domains`. That is the same takeover the
+   dashboard prompt performs.
+
+   Unlike Pages (step 5), a Worker custom domain needs **no DNS edit**. Its
+   record is a generic proxied `AAAA` at `100::` that is not tied to a script;
+   the routing lives in the Worker domain binding, so rebinding is enough.
 5. **Move the app hostname.** Pages → `st-peter-trivia` → Custom domains →
    remove `trivia.gogorichie.online`. Then add it to `trivia`.
 
@@ -105,6 +114,17 @@ outstanding. Until step 5, the live site is served by the old pair.
      HTML, not CSV or JSON. Check the body, never the status code.
    - Open host and scoreboard with the same `?game=` code; the host badge
      reads **Sync live** and a score change reaches the scoreboard.
+   - Prove the worker's auth end to end against a throwaway game code, since
+     a worker missing its secret still answers `/health` happily:
+
+     ```bash
+     B=https://trivia-sync.gogorichie.online
+     G=check$(date +%s)
+     curl -s -X POST "$B/game/$G" -H 'content-type: application/json' \
+       -d '{"step":1,"teams":[]}'                      # expect 403 Bad host token
+     curl -s -X POST "$B/game/$G" -H 'content-type: application/json' \
+       -H "x-host-token: <token>" -d '{"step":1,"teams":[]}'   # expect 200
+     ```
 7. **Delete the old pair** once step 6 passes: Worker `st-peter-trivia-sync`
    and Pages project `st-peter-trivia`.
 
