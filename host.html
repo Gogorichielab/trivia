@@ -23,4 +23,4 @@ function timerFollowIndex(){if(!timerCfg.enabled)return;const x=states[Math.min(
 /* Ticks the readout only. State is written on host actions, never on a tick,
    so a running timer does not post to the worker four times a second. */
 if(timerCfg.enabled)setInterval(timerPaint,250);
-onSyncStatus((s,detail)=>{const labels={off:"Sync off — this laptop only",connecting:"Sync connecting…",live:"Sync live",offline:"Sync offline",error:"Sync error"};syncBadge.textContent=(labels[s]||s)+(detail?" — "+detail:"");syncBadge.className="badge "+s});render()</script></body></html>
+window.addEventListener("trivia-sync-state",()=>{s=loadState();g=loadGame();states=flatten(g);render()});onSyncStatus((s,detail)=>{const labels={off:"Sync off — this laptop only",connecting:"Sync connecting…",live:"Sync live",offline:"Sync offline",error:"Sync error"};syncBadge.textContent=(labels[s]||s)+(detail?" — "+detail:"");syncBadge.className="badge "+s});render()</script></body></html>
