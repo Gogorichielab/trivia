@@ -391,6 +391,45 @@ cannot be processed when the default setup is enabled".
 
 These rules apply to all application work in this repository, not only event-critical changes.
 
+### Minimal implementation
+
+Follow the engineering approach from the
+[Ponytail skill](https://github.com/DietrichGebert/ponytail/blob/main/skills/ponytail/SKILL.md):
+be efficient, not careless. Understand the complete problem first, then stop at
+the simplest solution that works.
+
+Use this order when choosing an implementation:
+
+1. Confirm the requested behavior needs to exist. Do not build speculative
+   features.
+2. Search the repository for an existing helper, type, or pattern and reuse it.
+3. Prefer the language standard library.
+4. Prefer native browser, CSS, HTML, database, or Cloudflare features over
+   custom code.
+5. Reuse an installed dependency before adding another one.
+6. Use the smallest clear change that satisfies the requirement.
+
+Additional rules:
+
+- Read the task and trace the affected flow before choosing the small solution.
+  A small edit in the wrong place creates more work later.
+- Fix a bug at its root cause. Search callers and sibling paths before editing.
+  Prefer one fix in shared logic over repeated guards in each caller.
+- Do not add an interface with one implementation, a factory for one product,
+  configuration for an unchanging value, speculative scaffolding, or other
+  unrequested abstractions.
+- Prefer deletion over addition and boring code over clever code. Keep the diff
+  and number of changed files as small as correctness allows.
+- Do not add a dependency for behavior that a few clear lines or a native
+  feature already provide.
+- When a deliberate simplification has a real limit, document that limit and
+  the condition that would justify a more complex replacement.
+- Never simplify away trust-boundary validation, data-loss prevention, security
+  controls, accessibility basics, requested behavior, or required recovery
+  handling.
+- Leave the smallest useful regression check for non-trivial logic. Reuse the
+  existing test stack; do not introduce a test framework for one check.
+
 ### Concise agent communication
 
 Adapted from the
