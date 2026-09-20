@@ -1,4 +1,4 @@
-name = "st-peter-trivia-sync"
+name = "trivia-sync"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
 

@@ -55,9 +55,9 @@ laptop if any of it is unavailable.
 
 | Concern | Choice | Notes |
 | --- | --- | --- |
-| Hosting | **Cloudflare Pages** | `st-peter-trivia`, served at `https://trivia.gogorichie.online`. Direct upload; no build command. |
+| Hosting | **Cloudflare Pages** | `trivia`, served at `https://trivia.gogorichie.online`. Direct upload; no build command. |
 | Host authentication | **Cloudflare Access** | Path-scoped to `trivia.gogorichie.online/host*`. Viewer pages stay open. |
-| Cross-laptop sync | **Cloudflare Workers** + **Durable Objects** | `st-peter-trivia-sync` at `https://trivia-sync.gogorichie.online`. One Durable Object per game code. |
+| Cross-laptop sync | **Cloudflare Workers** + **Durable Objects** | `trivia-sync` at `https://trivia-sync.gogorichie.online`. One Durable Object per game code. |
 | Spreadsheet import | **PapaParse** + **SheetJS** | Vendored under `vendor/`, never a CDN. |
 | Unit tests | **node:test** | Built in; no test framework dependency. |
 | Browser tests | **Playwright** | Run at 1920x1080 against the real pages. |

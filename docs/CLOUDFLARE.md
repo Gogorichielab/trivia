@@ -8,14 +8,104 @@ record of what exists, how to change it, and how to take it down afterwards.
 | App | <https://trivia.gogorichie.online> |
 | Host console | <https://trivia.gogorichie.online/host> (behind Access) |
 | Sync worker | <https://trivia-sync.gogorichie.online> |
-| Pages project | `st-peter-trivia` (also at `st-peter-trivia.pages.dev`) |
-| Worker | `st-peter-trivia-sync` |
-| Access application | "St. Peter Trivia - Host Console" |
+| Pages project | `trivia` (also at `trivia-9rv.pages.dev`) |
+| Worker | `trivia-sync` |
+| Access application | "Trivia - Host Console" |
 | Zero Trust team | `gogorichiellc.cloudflareaccess.com` |
 
 The app still runs on one laptop with no network at all. Sync and Access are
 additive: if Cloudflare has a bad night, open the files locally and the game
 works exactly as it did before.
+
+---
+
+## Rename cutover (one time)
+
+The resources were originally created under venue-specific names. The table
+above lists the names this repository now deploys to. Cloudflare cannot rename
+a Pages project or a Worker in place, so the switch is a create-and-move, not
+an edit. **Do not run this during an event.**
+
+Before the code change reaches `main`, the Pages project must already exist, or
+the deploy job fails with "Project not found".
+
+| Old | New | Renameable in place? |
+| --- | --- | --- |
+| Pages project `st-peter-trivia` | `trivia` | No — create, deploy, move the domain |
+| Worker `st-peter-trivia-sync` | `trivia-sync` | No — deploying the new name creates a second script |
+| Access application "St. Peter Trivia - Host Console" | "Trivia - Host Console" | Yes — it is only a label |
+
+What does **not** change: `trivia.gogorichie.online`, `trivia-sync.gogorichie.online`,
+the Access policy (it matches on hostname, not on project), and `ALLOWED_ORIGIN`.
+
+**Already done** when this document was written: the Access application is
+renamed, and the empty Pages project `trivia` exists. Steps 2 onward are still
+outstanding. Until step 5, the live site is served by the old pair.
+
+### Order of operations
+
+1. **Create the Pages project** `trivia` (production branch `main`, direct
+   upload, no build command). Leave its custom domain unset for now — a
+   hostname cannot be attached to two projects at once.
+
+   `pages.dev` subdomains are global, and `trivia.pages.dev` was already
+   taken, so Cloudflare assigned `trivia-9rv.pages.dev`. That name only
+   matters for testing before the custom domain moves; the event never uses
+   it.
+2. **Merge the rename to `main`.** CI deploys the site to `trivia` and creates
+   the worker `trivia-sync`. Both are live on their `.pages.dev` /
+   `.workers.dev` names; neither serves the custom domains yet, so the old
+   pair keeps running. Check `https://trivia-9rv.pages.dev` loads before
+   going further.
+3. **Set the worker secret on the new script.** Secrets do not follow a rename:
+
+   ```bash
+   cd worker
+   npx wrangler secret put HOST_TOKEN
+   npx wrangler deployments list    # confirm it is trivia-sync you just wrote to
+   ```
+
+   Use the same token value as before, so host URLs already in a browser keep
+   working. Check it took:
+
+   ```bash
+   curl https://trivia-sync.<your-workers-subdomain>.workers.dev/health
+   # {"ok":true,"hostTokenSet":true}
+   ```
+
+   If `hostTokenSet` is `false`, stop. The new worker would refuse every write.
+4. **Move the sync hostname.** Workers & Pages → `st-peter-trivia-sync` →
+   Settings → Domains & Routes → remove `trivia-sync.gogorichie.online`. Then
+   add the same hostname to `trivia-sync`. Expect a few seconds where sync is
+   unavailable; the host keeps its local copy throughout.
+5. **Move the app hostname.** Pages → `st-peter-trivia` → Custom domains →
+   remove `trivia.gogorichie.online`. Then add it to `trivia` and wait for the
+   certificate to go active.
+6. **Verify before deleting anything**, in a private window:
+   - `https://trivia.gogorichie.online` loads the landing page.
+   - `/host` still redirects to Access and lets an approved email in.
+   - Open host and scoreboard with the same `?game=` code; the host badge
+     reads **Sync live** and a score change reaches the scoreboard.
+7. **Delete the old pair** once step 6 passes: Worker `st-peter-trivia-sync`
+   and Pages project `st-peter-trivia`.
+
+### What is lost, and what is not
+
+Deleting the old worker deletes its Durable Objects, which hold live game
+state per game code. Finished games do not matter. **Do not cut over with a
+game in progress** — a host mid-game would have to reload the game file and
+re-enter the current round's scores.
+
+Pages deployment history does not transfer. The old project's rollback list
+dies with it, so keep the old project until you are satisfied the new one has
+a good deployment to roll back to.
+
+If a step goes wrong, the way back is the same move in reverse: put the
+hostname back on the old resource. The old resources stay untouched and
+serving until step 7.
+
+Once step 7 is done, this whole section can be deleted — it is the only place
+the old names still appear.
 
 ---
 
@@ -97,7 +187,7 @@ A token in a URL can still be shoulder-surfed or land in a screenshot, so:
 
 ### Adding another host
 
-Zero Trust → Access → Applications → "St. Peter Trivia - Host Console" →
+Zero Trust → Access → Applications → "Trivia - Host Console" →
 Policies → add the email. They get a one-time code by email. No password.
 
 ---
@@ -151,7 +241,7 @@ cd ..
 rm -rf _site && mkdir _site
 cp index.html host.html display.html scoreboard.html styles.css game.js import.js sync.js _site/
 cp -r vendor _site/vendor
-npx wrangler pages deploy _site --project-name=st-peter-trivia --branch=main
+npx wrangler pages deploy _site --project-name=trivia --branch=main
 ```
 
 Check the worker afterwards:
@@ -180,7 +270,7 @@ The account ID is not a secret — it is a plain `env:` value in
 
 1. Cloudflare dashboard → **My Profile** → **API Tokens** → **Create Token**.
 2. Choose **Create Custom Token**.
-3. Name it something like `st-peter-trivia deploys`.
+3. Name it something like `trivia deploys`.
 4. Permissions — add exactly these two, and nothing else:
    - `Account` · `Cloudflare Pages` · **Edit**
    - `Account` · `Workers Scripts` · **Edit**
@@ -219,7 +309,7 @@ the app.
 Every Pages deploy is kept. Going back to an earlier one does not delete the
 newer one.
 
-1. Cloudflare dashboard → **Workers & Pages** → **st-peter-trivia**.
+1. Cloudflare dashboard → **Workers & Pages** → **trivia**.
 2. Open the **Deployments** tab.
 3. Find the last deployment that worked. Check the commit message and time.
 4. Use the **...** menu on that row → **Rollback to this deployment**.

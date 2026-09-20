@@ -208,7 +208,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy _site --project-name=st-peter-trivia --branch=main
+          command: pages deploy _site --project-name=trivia --branch=main
 
   deploy-worker:
     name: Deploy sync worker
