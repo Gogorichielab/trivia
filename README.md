@@ -1,10 +1,10 @@
-# St. Peter Trivia Night
+# Trivia Night
 
-St. Peter Trivia Night is a simple web app for running a live trivia game at **St. Peter Evangelical Lutheran Church in Gilberts, Illinois**.
+Trivia Night is a simple web app for running a live trivia game at any venue — a hall, a pub, a classroom, a fundraiser.
 
-The app gives the host one screen to run the game, an audience screen for questions and answers, and a scoreboard screen. It is built to work on church laptops and large TVs or projectors.
+The app gives the host one screen to run the game, an audience screen for questions and answers, and a scoreboard screen. It is built to work on ordinary laptops driving large TVs or projectors.
 
-The live app is at <https://trivia.gogorichie.online>.
+A live instance runs at <https://trivia.gogorichie.online>.
 
 ## What the app does
 
@@ -22,7 +22,7 @@ The app can also keep two laptops in sync. For example, one laptop can run the h
 
 ## Why this project exists
 
-This project was built for a church trivia night. The main goals are simple:
+This project was built to run a live trivia night without a lot of moving parts. The main goals are simple:
 
 - Make the game easy for a volunteer to run.
 - Make questions easy to read from across the room.
@@ -93,7 +93,7 @@ A normal game follows this path:
 8. The final-results screen announces the winner or tied winners.
 9. The host downloads a CSV file with every round score and total.
 
-The current event format supports five rounds with eight questions per round, plus a tiebreaker.
+The default format is five rounds with eight questions per round, plus a tiebreaker. Question and team files decide the actual shape of a game.
 
 ## Question and team files
 
@@ -113,7 +113,7 @@ team_name,table_number
 
 The importer accepts common heading differences. For example, `Host Notes`, `host_notes`, and similar names can be understood.
 
-Files in the `mock/` folder are test data. They are not the final event questions.
+Files in the `mock/` folder are sample data. Replace them with your own questions and teams for a real game.
 
 See `MOCK_DATA.md` for more details.
 
@@ -201,7 +201,8 @@ Cross-laptop sync tests use a local Cloudflare Worker and are documented in `doc
 | `tests/` | Automated tests |
 | `mock/` | Development question and team files |
 | `docs/CLOUDFLARE.md` | Cloudflare setup and operations |
-| `TRIVIA_NIGHT_GUIDANCE.md` | Event and game-night guidance |
+| `example.game.json` | Example game-file structure |
+| `TRIVIA_NIGHT_GUIDANCE.md` | Reusable event planning and run-of-show guide |
 | `AGENTS.md` | Instructions for AI coding agents |
 
 ## Game-night backup
@@ -210,10 +211,13 @@ The web app is not the only way to run the event. A backup plan can use slides f
 
 This is intentional. A trivia night should not stop because a web service or Wi-Fi connection has a problem.
 
-## Church
+## Reusing the app
 
-**St. Peter Evangelical Lutheran Church**  
-985 Galligan Road  
-Gilberts, IL 60136
+Nothing in the app is tied to one venue or one night. To run your own event:
 
-Original game night: **September 19, 2026**
+1. Put your questions and teams in CSV or Excel files using the columns above.
+2. Serve the files in this folder from any static host, or run them locally.
+3. Pick a fresh `?game=` code for each event and use it on all three screens.
+4. Optionally deploy the Worker in `worker/` if you need two laptops in sync.
+
+See `TRIVIA_NIGHT_GUIDANCE.md` for a run-of-show you can reuse each time.

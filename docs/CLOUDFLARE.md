@@ -117,7 +117,7 @@ Policies → add the email. They get a one-time code by email. No password.
 | **D1** | No | A live game is one small, frequently changing state document. The Durable Object already stores it consistently beside the WebSocket connections. |
 | **R2** | No | Nothing large enough to need object storage. |
 | **Turnstile** | No | No public form to protect. |
-| **Zaraz / Web Analytics** | No | Nobody needs attendance analytics for a church trivia night, and it adds a third-party script to a page that must work offline. |
+| **Zaraz / Web Analytics** | No | Nobody needs attendance analytics for a trivia night, and it adds a third-party script to a page that must work offline. |
 | **Images / Stream** | No | Not free, and no image or video questions yet. |
 
 > Free-tier limits move. Check

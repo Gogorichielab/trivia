@@ -47,7 +47,7 @@ test("imports the real mock teams sheet", () => {
 
   assert.equal(kind, "teams");
   assert.equal(teams.length, 5);
-  assert.deepEqual(teams[0], { name: "The Reformation Ringers", score: 0, table: "1" });
+  assert.deepEqual(teams[0], { name: "Quiz Please", score: 0, table: "1" });
   assert.ok(teams.every((t) => t.score === 0), "every team starts on zero");
 });
 

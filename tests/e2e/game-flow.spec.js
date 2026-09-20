@@ -66,7 +66,7 @@ test("host imports the teams spreadsheet", async ({ page }) => {
   await expect(log).toHaveClass(/good/);
   await expect(log).toContainText("Loaded 5 teams");
   await expect(page.locator("#scoreTable tbody tr")).toHaveCount(5);
-  await expect(page.locator("#scoreTable tbody tr").first().locator("input").first()).toHaveValue("The Reformation Ringers");
+  await expect(page.locator("#scoreTable tbody tr").first().locator("input").first()).toHaveValue("Quiz Please");
 });
 
 test("a sheet it cannot read is reported, not silently swallowed", async ({ page }, testInfo) => {
@@ -144,9 +144,9 @@ test("scores change and the scoreboard ranks by total", async ({ browser }) => {
   await board.goto(`/scoreboard.html?game=${code}`);
   const rows = board.locator(".row");
   await expect(rows).toHaveCount(5, { timeout: 5000 });
-  await expect(rows.nth(0)).toContainText("The Mighty Lutherans");
+  await expect(rows.nth(0)).toContainText("Trivia Newton-John");
   await expect(rows.nth(0)).toContainText("3");
-  await expect(rows.nth(1)).toContainText("The Reformation Ringers");
+  await expect(rows.nth(1)).toContainText("Quiz Please");
 
   await context.close();
 });
@@ -166,7 +166,7 @@ test("host downloads a CSV with round scores and totals", async ({ page }) => {
   expect(download.suggestedFilename()).toBe(code + "-results.csv");
   const contents = require("node:fs").readFileSync(await download.path(), "utf8");
   expect(contents).toContain("Rank,Team,Table");
-  expect(contents).toContain("The Reformation Ringers");
+  expect(contents).toContain("Quiz Please");
   expect(contents).toContain(",6,");
 });
 

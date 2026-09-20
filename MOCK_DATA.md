@@ -5,7 +5,7 @@ These files are temporary development fixtures for the Trivia Night app.
 - `mock/questions.csv` — 40 sample questions across five rounds plus a tiebreaker.
 - `mock/teams.csv` — five sample teams.
 
-They are **not** the final game-night content. Replace them with the spreadsheets supplied by the event organizer.
+They are **not** game content. Replace them with the spreadsheets supplied by whoever is organizing your event.
 
 ## Expected question columns
 
@@ -15,4 +15,4 @@ They are **not** the final game-night content. Replace them with the spreadsheet
 
 `team_name, table_number`
 
-The importer should be tolerant of common spreadsheet heading variations when the final files arrive.
+The importer is tolerant of common spreadsheet heading variations, so files from different organizers should load without reformatting.
