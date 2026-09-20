@@ -94,6 +94,7 @@ Important files:
 - `game.js` — shared game/state logic and `esc()`.
 - `import.js` — spreadsheet import.
 - `sync.js` — optional cross-laptop sync; a no-op when unconfigured.
+- `timer.js` — optional question countdown; inert unless `?timer=` is given.
 - `styles.css` — shared presentation styling.
 - `vendor/` — PapaParse and SheetJS, vendored.
 - `worker/` — the Cloudflare Worker and its Durable Object.
@@ -201,6 +202,41 @@ an identifier rather than a credential and is a plain `env:` value in the
 workflow. The deploy jobs skip with a warning when the token is absent rather
 than failing the build.
 
+## Question Timer
+
+An optional per-question countdown, implemented in `timer.js` for #10. It is a
+post-event feature that shipped on game day, which was only reasonable because
+it is off unless asked for.
+
+The rules that matter when changing it:
+
+- **Off by default, and it must stay that way.** With no `?timer=` on the host
+  URL, no control appears, no timer state is written, and every screen behaves
+  as it did before the timer existed. A host who never asks for it should not
+  be able to tell it is there.
+- **The timer never drives the game.** It does not advance a question, block
+  Next or Back, or change a score. At zero it says "Time's up" and waits. A
+  countdown that can move the game on is a countdown that can move it on at the
+  wrong moment.
+- **One deadline, not a stopwatch per screen.** State is an absolute `endsAt`,
+  so every screen counts down to the same moment rather than starting its own
+  clock from whenever it received the state. A screen whose clock is off is
+  wrong by its own skew, so the remaining time is clamped to the duration and
+  can never read longer than the timer was set for.
+- **Ticks repaint; they do not save.** State is written on host actions only. A
+  tick that called `saveState` would post to the worker four times a second for
+  the length of every question.
+- **The arithmetic stays out of the DOM.** `timer.js` holds pure functions so
+  the maths is tested without a browser. A timer that is wrong on the wall is
+  not something to find out during a round.
+- **The display needs no flag of its own.** Timer state travels with the game
+  state the host already syncs. A single screen opts out with `?timer=0`.
+
+The worker relays `timer` without an opinion about it, the same way it relays
+`teams`. A worker that has not been redeployed drops the field, and the
+countdown falls back to the host's own screen — the same degradation the sync
+rules ask for.
+
 ## Display Requirements
 
 The audience may be viewing from approximately 20 feet away.
@@ -290,14 +326,20 @@ CI leaves it unset.
   display never reveals an answer early, scoreboard ranking, state surviving a
   refresh, team names containing quotes and angle brackets, and question text
   rendering at 48px or larger.
-- `tests/e2e/a11y.spec.js` — axe-core on all four pages.
+- `tests/e2e/a11y.spec.js` — axe-core on all four pages, and on the host and
+  display with a countdown actually on screen.
+- `tests/timer.test.js` — the countdown arithmetic: `?timer=` parsing,
+  pause and resume, clamping, rounding, and the spoken labels.
+- `tests/e2e/timer.spec.js` — one test per acceptance criterion on #10,
+  including two displays agreeing on the time left, navigation still
+  working after expiry, and the timer staying invisible when not asked for.
 - `tests/e2e/sync.spec.js` — two isolated browser contexts standing in for the
   two laptops, including reconnect catch-up and a viewer's write being refused.
 
 ### Before merging an event-critical change
 
 Add a test for the behaviour you changed. A change to the game flow, the
-importer, or sync without a test is not finished.
+importer, sync, or the timer without a test is not finished.
 
 Then confirm by hand on the host laptop, in the host browser, against the real
 game file — CI passing is necessary, not sufficient.
@@ -329,6 +371,13 @@ publish directory. Do not add question data to that copy step.
 
 The host loads the game file from the laptop through the file picker, which is
 why none of it needs publishing.
+
+Checking this from outside needs care. Pages answers **200 with the landing
+page** for any path it does not have, so a status-code check on
+`/mock/questions.csv` or `/fall-trivia.game.json` returns 200 whether or not the
+file was published. Compare the response body or its content type, never the
+status code alone. The CI step above inspects the publish directory directly,
+which is why that is the check that counts.
 
 ### CodeQL
 
@@ -586,7 +635,6 @@ The MVP is ready for game night when:
 Post-event improvements may include:
 
 - Tighter Cloudflare Access policies and a shorter Access session.
-- Countdown timer.
 - Animations and transitions.
 - Image questions.
 - CSV conversion tools.
@@ -594,3 +642,6 @@ Post-event improvements may include:
 - Improved administration tools.
 
 These features should not compromise the stability of the event MVP.
+
+The countdown timer that was on this list shipped on game day (#10, PR #31).
+See **Question Timer** above for the rules it has to keep.
