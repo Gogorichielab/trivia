@@ -322,7 +322,8 @@ CI leaves it unset.
 
 - `tests/import.test.js` — heading variants, round-column shapes, every
   loud-failure path, and the real mock spreadsheets.
-- `tests/e2e/game-flow.spec.js` — the round → question → answer walk, that the
+- `tests/e2e/game-flow.spec.js` — the lobby → round → all questions → answer
+  review → scoring → final-results walk, that the
   display never reveals an answer early, scoreboard ranking, state surviving a
   refresh, team names containing quotes and angle brackets, and question text
   rendering at 48px or larger.
@@ -580,7 +581,8 @@ Before a game-day change counts as done, run it **on the host laptop, in the
 host browser, against the real game file**:
 
 1. Load the game data.
-2. Advance round → question → answer, and go back.
+2. Advance from the lobby through a round, its questions, answer review, and
+   scoring screen, then go back.
 3. Add a team, change a score, confirm the scoreboard reorders.
 4. Refresh every open window and confirm nothing was lost.
 
@@ -635,13 +637,12 @@ The MVP is ready for game night when:
 Work that belongs in the quiet stretch between game nights:
 
 - Tighter Cloudflare Access policies and a shorter Access session.
-- Animations and transitions.
 - Image questions.
 - CSV conversion tools.
-- Score downloads/exports.
 - Improved administration tools.
 
 These features should not compromise the stability of the core game flow.
 
-The countdown timer that was on this list shipped on a game day (#10, PR #31).
-See **Question Timer** above for the rules it has to keep.
+The countdown timer shipped on a game day (#10, PR #31). Presentation
+transitions and score downloads shipped later (#11 and #12, PR #39). See
+**Question Timer** above for the timer rules that must remain in place.
