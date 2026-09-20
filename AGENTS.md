@@ -15,6 +15,8 @@ Before making changes, review:
 3. `MOCK_DATA.md` — temporary spreadsheet schemas.
 4. `example.game.json` — game-data structure.
 5. `docs/CLOUDFLARE.md` — hosting, sync, Access, and post-event cleanup.
+6. The official [Cloudflare skills](https://github.com/cloudflare/skills) —
+   current guidance for Cloudflare development and deployment work.
 
 Treat the guidance document as the product requirements for a game night.
 
@@ -379,6 +381,29 @@ page** for any path it does not have, so a status-code check on
 file was published. Compare the response body or its content type, never the
 status code alone. The CI step above inspects the publish directory directly,
 which is why that is the check that counts.
+
+### Follow the Cloudflare skill
+
+This application is deployed through Cloudflare. Before changing Cloudflare
+Pages, Workers, Durable Objects, Access, DNS, Wrangler, bindings, secrets, or
+deployment configuration, read the official
+[Cloudflare platform skill](https://github.com/cloudflare/skills/blob/main/skills/cloudflare/SKILL.md).
+Then read the product-specific reference or skill that matches the work, such
+as Pages, Durable Objects, Workers best practices, or Cloudflare One for Access.
+If the skill is unavailable in the current agent environment, use the official
+Cloudflare developer documentation as the fallback.
+
+- Use the skill as a guide to the right Cloudflare product and documentation.
+- Check the current [Cloudflare developer documentation](https://developers.cloudflare.com/)
+  before relying on remembered API shapes, configuration fields, limits,
+  pricing, or compatibility requirements.
+- Inspect this repository's existing workflow, Wrangler configuration, and
+  `docs/CLOUDFLARE.md` before proposing a change.
+- Keep the current Cloudflare Pages deployment unless the task explicitly
+  requires a migration. Guidance that prefers Workers for a new application
+  does not require migrating this existing Pages project.
+- Never place Cloudflare credentials or secret values in source files,
+  committed configuration, logs, examples, issues, or pull requests.
 
 ### CodeQL
 
