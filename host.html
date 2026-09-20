@@ -1,26 +1,288 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Host | St. Peter Trivia</title><link rel="stylesheet" href="styles.css"></head><body><main class="host"><h1>Host Console</h1><p id="gameCode"></p><p id="syncBadge" class="badge"></p><div class="controls"><button onclick="back()">← Back</button><button onclick="next()">Next →</button><button onclick="showBoard()">Show Scoreboard</button><button onclick="resetGame()" class="danger">Reset</button></div><section id="timerPanel" class="timerpanel" hidden><h2>Question Timer</h2><p id="timerReadout" class="timerreadout none" role="timer" aria-live="off" aria-atomic="true" aria-label="No timer running">—</p><div class="controls"><button onclick="timerRestart()">Restart timer</button><button id="timerToggle" onclick="timerTogglePause()">Pause timer</button><button onclick="timerClear()">Clear timer</button></div><p class="hint" id="timerHint"></p></section><section class="team"><h2>Current State</h2><div id="current"></div></section><h2>Teams & Scores</h2><div id="teams" class="grid"></div><div class="controls"><button onclick="addTeam()">+ Add Team</button></div><h2>Load Questions or Teams</h2><input type="file" id="file" aria-label="Load a questions sheet, team list or game file" accept=".json,.csv,.tsv,.xlsx,.xls,.xlsm"><p class="hint">Takes a questions sheet, a team list, or a game file (.csv, .xlsx or .json). Which one it is, is worked out from the column headings. Load them one at a time.</p><pre id="importLog" class="log" hidden></pre></main><script src="vendor/papaparse.min.js"></script><script src="vendor/xlsx.full.min.js"></script><script src="game.js"></script><script src="import.js"></script><script src="timer.js"></script><script src="sync.js"></script><script>let s=loadState(),g=loadGame(),states=flatten(g);gameCode.textContent="Game: "+(new URLSearchParams(location.search).get("game")||"default");function render(){states=flatten(g);const x=states[Math.min(s.index,states.length-1)];current.innerHTML="<b>"+esc(x.type).toUpperCase()+"</b><p>"+esc(x.title||x.text||"")+"</p>"+(x.type==="answer"?"<p>Answer: "+esc(x.answer)+"</p>":"");teams.innerHTML="";s.teams.forEach((t,i)=>{let d=document.createElement("div");d.className="team";d.innerHTML='<input aria-label="Team name" value="'+esc(t.name)+'" onchange="rename('+i+',this.value)"><div class="score">'+esc(t.score)+' pts</div><button class="small" aria-label="Subtract a point from '+esc(t.name)+'" onclick="score('+i+',-1)">−</button> <button class="small" aria-label="Add a point to '+esc(t.name)+'" onclick="score('+i+',1)">+</button>';teams.appendChild(d)});timerPaint()}function commit(){saveState(s);render()}function next(){s.index=Math.min(s.index+1,states.length-1);timerFollowIndex();commit()}function back(){s.index=Math.max(0,s.index-1);timerFollowIndex();commit()}function addTeam(){s.teams.push({name:"Team "+(s.teams.length+1),score:0});commit()}function rename(i,v){s.teams[i].name=v;commit()}function score(i,n){s.teams[i].score+=n;commit()}function showBoard(){localStorage.setItem(gameKey()+":mode","scoreboard");alert("Open scoreboard.html?game="+(new URLSearchParams(location.search).get("game")||"default"))}function resetGame(){if(confirm("Reset game state and scores?")){s={index:0,teams:[]};commit()}}function log(msg,bad){importLog.hidden=false;importLog.textContent=msg;importLog.className="log"+(bad?" bad":" good")}
-file.onchange=async e=>{const f=e.target.files[0];if(!f)return;
-try{const r=await importFile(f);
-if(r.kind==="teams"){s.teams=r.teams;commit();log("Loaded "+r.teams.length+" teams from "+f.name+":\n"+r.teams.map(t=>"  • "+t.name).join("\n"))}
-else{g=r.game;saveGame(g);s.index=0;commit();const n=summarizeGame(g);
-log("Loaded "+n.questions+" questions in "+n.rounds+" rounds from "+f.name+"\n"
-+g.rounds.map((rd,i)=>"  • "+rd.name+" — "+n.perRound[i]+" questions").join("\n")
-+"\n  • Tiebreaker: "+(n.hasTiebreaker?"yes":"MISSING"))}}
-catch(err){log("Could not load "+f.name+"\n\n"+err.message,true)}
-finally{e.target.value=""}};const TIMER_KEY=gameKey()+":timer",timerCfg=timerConfig(location.search,TIMER_KEY);
-/* Leaving the timer off must leave no trace of it on the other screens, so a
-   game that ran with one earlier drops it here rather than stranding a stale
-   countdown on the display. */
-if(!timerCfg.enabled&&s.timer){s.timer=null;saveState(s)}
-if(timerCfg.enabled){timerPanel.hidden=false;timerHint.textContent=Math.round(timerCfg.duration/1000)+"s per question, started automatically. It never blocks Next or Back \u2014 when it runs out it just says so."}
-function timerPaint(){const v=timerView(s.timer,Date.now());timerReadout.textContent=v.visible?v.text:"\u2014";timerReadout.setAttribute("aria-label",v.visible?v.label:"No timer running");timerReadout.className="timerreadout "+v.state;timerToggle.textContent=isTimerRunning(s.timer)?"Pause timer":"Resume timer";timerToggle.disabled=!s.timer}
-function timerRestart(){s.timer=startTimer(timerCfg.duration,Date.now());commit()}
-function timerTogglePause(){if(!s.timer)return;s.timer=isTimerRunning(s.timer)?pauseTimer(s.timer,Date.now()):resumeTimer(s.timer,Date.now());commit()}
-function timerClear(){s.timer=null;commit()}
-/* A question gets a fresh countdown; a round card or an answer clears it.
-   This follows where the host has already gone -- it never decides. */
-function timerFollowIndex(){if(!timerCfg.enabled)return;const x=states[Math.min(s.index,states.length-1)];s.timer=x&&x.type==="question"?startTimer(timerCfg.duration,Date.now()):null}
-/* Ticks the readout only. State is written on host actions, never on a tick,
-   so a running timer does not post to the worker four times a second. */
-if(timerCfg.enabled)setInterval(timerPaint,250);
-window.addEventListener("trivia-sync-state",()=>{s=loadState();g=loadGame();states=flatten(g);render()});onSyncStatus((s,detail)=>{const labels={off:"Sync off — this laptop only",connecting:"Sync connecting…",live:"Sync live",offline:"Sync offline",error:"Sync error"};syncBadge.textContent=(labels[s]||s)+(detail?" — "+detail:"");syncBadge.className="badge "+s});render()</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Host | St. Peter Trivia</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="host">
+    <h1>Host Console</h1>
+    <p id="gameCode"></p>
+    <p id="syncBadge" class="badge"></p>
+
+    <div class="controls sticky-controls">
+      <button id="backButton" onclick="back()">← Back</button>
+      <button id="nextButton" onclick="next()">Next →</button>
+      <button onclick="showBoard()">Open Scoreboard</button>
+      <button onclick="downloadResults()">Download Results</button>
+      <button onclick="resetGame()" class="danger">Reset Game</button>
+    </div>
+
+    <section id="timerPanel" class="timerpanel" hidden>
+      <h2>Question Timer</h2>
+      <p id="timerReadout" class="timerreadout none" role="timer" aria-live="off" aria-atomic="true" aria-label="No timer running">—</p>
+      <div class="controls">
+        <button onclick="timerRestart()">Restart Timer</button>
+        <button id="timerToggle" onclick="timerTogglePause()">Pause Timer</button>
+        <button onclick="timerClear()">Clear Timer</button>
+      </div>
+      <p class="hint" id="timerHint"></p>
+    </section>
+
+    <section class="team current-card">
+      <h2>Current Step</h2>
+      <div id="current"></div>
+    </section>
+
+    <section>
+      <div class="section-heading">
+        <h2>Teams and Round Scores</h2>
+        <button onclick="addTeam()">+ Add Team</button>
+      </div>
+      <p class="hint">Enter each team's total for the round. Overall totals are calculated automatically.</p>
+      <div class="score-table-wrap">
+        <table id="scoreTable" class="score-table"></table>
+      </div>
+    </section>
+
+    <section>
+      <h2>Load Questions or Teams</h2>
+      <input type="file" id="file" aria-label="Load a questions sheet, team list or game file" accept=".json,.csv,.tsv,.xlsx,.xls,.xlsm">
+      <p class="hint">Load a question sheet, team list, or game file. The column headings tell the app which kind it is.</p>
+      <pre id="importLog" class="log" hidden></pre>
+    </section>
+  </main>
+
+  <script src="vendor/papaparse.min.js"></script>
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="game.js"></script>
+  <script src="import.js"></script>
+  <script src="timer.js"></script>
+  <script src="sync.js"></script>
+  <script>
+    let g = loadGame();
+    let s = migrateState(loadState(), g);
+    let states = flatten(g);
+    const code = new URLSearchParams(location.search).get("game") || "default";
+    gameCode.textContent = "Game: " + code;
+
+    function stepDescription(step) {
+      if (step.type === "lobby") return { label: "LOBBY", text: step.title };
+      if (step.type === "round") return { label: "ROUND INTRO", text: step.title };
+      if (step.type === "question") return { label: `QUESTION ${step.q + 1}`, text: step.text };
+      if (step.type === "answer") return { label: `ANSWER ${step.q + 1}`, text: `${step.text}\nAnswer: ${step.answer}` };
+      if (step.type === "score") return { label: "SCORE ENTRY", text: step.title };
+      if (step.type === "tiebreaker") return { label: "TIEBREAKER", text: step.text };
+      if (step.type === "tiebreaker-answer") return { label: "TIEBREAKER ANSWER", text: `${step.text}\nAnswer: ${step.answer}` };
+      return { label: "FINAL RESULTS", text: "Confirm the final standings on the scoreboard." };
+    }
+
+    function nextLabel(step) {
+      const nextStep = states[Math.min(s.index + 1, states.length - 1)];
+      if (step.type === "lobby") return "Start Round 1 →";
+      if (step.type === "round") return "Show Question 1 →";
+      if (step.type === "question" && nextStep.type === "question") return "Next Question →";
+      if (step.type === "question") return "Begin Answer Review →";
+      if (step.type === "answer" && nextStep.type === "answer") return "Next Answer →";
+      if (step.type === "answer") return "Enter Round Scores →";
+      if (step.type === "score" && nextStep.type === "round") return "Start Next Round →";
+      if (step.type === "score") return "Show Tiebreaker →";
+      if (step.type === "tiebreaker") return "Reveal Tiebreaker Answer →";
+      if (step.type === "tiebreaker-answer") return "Show Final Results →";
+      return "Game Complete";
+    }
+
+    function renderScoreTable(activeRound) {
+      const rounds = g.rounds || [];
+      const header = [
+        "<th>Team</th>",
+        "<th>Table</th>",
+        ...rounds.map((round, index) => `<th class="${activeRound === index ? "active-round" : ""}">${esc(round.name || `Round ${index + 1}`)}<small> / ${roundMax(round)}</small></th>`),
+        "<th>Adjustment</th>",
+        "<th>Total</th>",
+      ].join("");
+      const body = s.teams.map((team, teamIndex) => {
+        const scores = rounds.map((round, roundIndex) =>
+          `<td class="${activeRound === roundIndex ? "active-round" : ""}"><input type="number" inputmode="numeric" aria-label="${esc(team.name)} ${esc(round.name || `Round ${roundIndex + 1}`)} score" value="${esc(team.roundScores[roundIndex])}" onchange="setRoundScore(${teamIndex},${roundIndex},this.value)"></td>`
+        ).join("");
+        return `<tr>
+          <td><input aria-label="Team name" value="${esc(team.name)}" onchange="renameTeam(${teamIndex},this.value)"></td>
+          <td><input aria-label="${esc(team.name)} table number" value="${esc(team.table)}" onchange="setTable(${teamIndex},this.value)"></td>
+          ${scores}
+          <td><input type="number" inputmode="numeric" aria-label="${esc(team.name)} score adjustment" value="${esc(team.adjustment)}" onchange="setAdjustment(${teamIndex},this.value)"></td>
+          <td class="total">${esc(teamTotal(team))}</td>
+        </tr>`;
+      }).join("");
+      scoreTable.innerHTML = `<thead><tr>${header}</tr></thead><tbody>${body || '<tr><td colspan="99">Load or add teams to begin scoring.</td></tr>'}</tbody>`;
+    }
+
+    function render() {
+      states = flatten(g);
+      s = migrateState(s, g);
+      const step = states[s.index] || states[0];
+      const description = stepDescription(step);
+      current.innerHTML = `<b>${esc(description.label)}</b><p>${esc(description.text).replace(/\n/g, "<br>")}</p>`;
+      backButton.disabled = s.index === 0;
+      nextButton.disabled = s.index === states.length - 1;
+      nextButton.textContent = nextLabel(step);
+      renderScoreTable(step.type === "score" ? step.round : -1);
+      timerPaint();
+    }
+
+    function roundMax(round) {
+      return (round.questions || []).reduce((sum, question) => sum + (Number(question.points) || 1), 0);
+    }
+
+    function commit() {
+      s = migrateState(s, g);
+      saveState(s);
+      render();
+    }
+
+    function next() {
+      s.index = Math.min(s.index + 1, states.length - 1);
+      timerFollowIndex();
+      commit();
+    }
+
+    function back() {
+      s.index = Math.max(0, s.index - 1);
+      timerFollowIndex();
+      commit();
+    }
+
+    function addTeam() {
+      s.teams.push(normalizeTeam({ name: "Team " + (s.teams.length + 1) }, g.rounds.length));
+      commit();
+    }
+
+    function renameTeam(index, value) {
+      s.teams[index].name = value.trim() || "Unnamed Team";
+      commit();
+    }
+
+    function setTable(index, value) {
+      s.teams[index].table = value.trim();
+      commit();
+    }
+
+    function setRoundScore(teamIndex, roundIndex, value) {
+      s.teams[teamIndex].roundScores[roundIndex] = Number(value) || 0;
+      commit();
+    }
+
+    function setAdjustment(index, value) {
+      s.teams[index].adjustment = Number(value) || 0;
+      commit();
+    }
+
+    function showBoard() {
+      window.open("scoreboard.html?game=" + encodeURIComponent(code), "trivia-scoreboard");
+    }
+
+    function downloadResults() {
+      const blob = new Blob([resultsCsv(g, s)], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = resultFilename(code);
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function resetGame() {
+      if (!confirm("Return to the lobby and reset every team score? Team names will be kept.")) return;
+      s.index = 0;
+      s.timer = null;
+      s.teams = s.teams.map((team) => normalizeTeam({ name: team.name, table: team.table }, g.rounds.length));
+      commit();
+    }
+
+    function log(message, bad) {
+      importLog.hidden = false;
+      importLog.textContent = message;
+      importLog.className = "log " + (bad ? "bad" : "good");
+    }
+
+    file.onchange = async (event) => {
+      const selected = event.target.files[0];
+      if (!selected) return;
+      try {
+        const imported = await importFile(selected);
+        if (imported.kind === "teams") {
+          s.teams = imported.teams.map((team) => normalizeTeam(team, g.rounds.length));
+          commit();
+          log("Loaded " + imported.teams.length + " teams from " + selected.name + ":\n" +
+            imported.teams.map((team) => "  • " + team.name).join("\n"));
+        } else {
+          g = imported.game;
+          saveGame(g);
+          s.index = 0;
+          s = migrateState(s, g);
+          commit();
+          const summary = summarizeGame(g);
+          log("Loaded " + summary.questions + " questions in " + summary.rounds + " rounds from " + selected.name + "\n" +
+            g.rounds.map((round, index) => "  • " + round.name + " — " + summary.perRound[index] + " questions").join("\n") +
+            "\n  • Tiebreaker: " + (summary.hasTiebreaker ? "yes" : "MISSING"));
+        }
+      } catch (error) {
+        log("Could not load " + selected.name + "\n\n" + error.message, true);
+      } finally {
+        event.target.value = "";
+      }
+    };
+
+    const TIMER_KEY = gameKey() + ":timer";
+    const timerCfg = timerConfig(location.search, TIMER_KEY);
+    if (!timerCfg.enabled && s.timer) {
+      s.timer = null;
+      saveState(s);
+    }
+    if (timerCfg.enabled) {
+      timerPanel.hidden = false;
+      timerHint.textContent = Math.round(timerCfg.duration / 1000) + " seconds per question. The timer never changes the game step.";
+    }
+    function timerPaint() {
+      const view = timerView(s.timer, Date.now());
+      timerReadout.textContent = view.visible ? view.text : "—";
+      timerReadout.setAttribute("aria-label", view.visible ? view.label : "No timer running");
+      timerReadout.className = "timerreadout " + view.state;
+      timerToggle.textContent = isTimerRunning(s.timer) ? "Pause Timer" : "Resume Timer";
+      timerToggle.disabled = !s.timer;
+    }
+    function timerRestart() { s.timer = startTimer(timerCfg.duration, Date.now()); commit(); }
+    function timerTogglePause() {
+      if (!s.timer) return;
+      s.timer = isTimerRunning(s.timer) ? pauseTimer(s.timer, Date.now()) : resumeTimer(s.timer, Date.now());
+      commit();
+    }
+    function timerClear() { s.timer = null; commit(); }
+    function timerFollowIndex() {
+      if (!timerCfg.enabled) return;
+      const step = states[Math.min(s.index, states.length - 1)];
+      s.timer = step && step.type === "question" ? startTimer(timerCfg.duration, Date.now()) : null;
+    }
+    if (timerCfg.enabled) setInterval(timerPaint, 250);
+
+    window.addEventListener("trivia-sync-state", () => {
+      g = loadGame();
+      s = migrateState(loadState(), g);
+      render();
+    });
+    onSyncStatus((state, detail) => {
+      const labels = {
+        off: "Sync off — this laptop only",
+        connecting: "Sync connecting…",
+        live: "Sync live",
+        offline: "Sync offline",
+        error: "Sync error",
+      };
+      syncBadge.textContent = (labels[state] || state) + (detail ? " — " + detail : "");
+      syncBadge.className = "badge " + state;
+    });
+    render();
+  </script>
+</body>
+</html>

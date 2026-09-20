@@ -102,8 +102,9 @@ test("fresh host restores the authoritative game and scores", async () => {
     search: "?game=review001&token=dummy",
     fetch: (_url, options = {}) => {
       if (!options.method) return response(200, {
+        version: 2,
         index: 3,
-        teams: [{ name: "Recovered", score: 9 }],
+        teams: [{ name: "Recovered", table: "4", roundScores: [4], adjustment: 5, score: 9 }],
         timer: null,
         game: savedGame,
         rev: 7,
@@ -115,6 +116,8 @@ test("fresh host restores the authoritative game and scores", async () => {
 
   assert.equal(app.context.loadState().index, 3);
   assert.equal(app.context.loadState().teams[0].score, 9);
+  assert.equal(app.context.loadState().teams[0].table, "4");
+  assert.equal(app.context.loadState().teams[0].roundScores[0], 4);
   assert.equal(app.context.loadGame().rounds[0].name, "Saved");
 });
 

@@ -114,7 +114,7 @@ Policies → add the email. They get a one-time code by email. No password.
 | **DNS** | Yes | `trivia` and `trivia-sync` records, both proxied. |
 | **Universal SSL** | Yes | Free, and the reason both subdomains are single-level. |
 | **KV** | No | The free tier allows 1,000 writes/day. A live game writes on every score change and every question advance. Durable Object storage has no daily write cap. |
-| **D1** | No | A relational database for four fields of state is more to go wrong, not less. |
+| **D1** | No | A live game is one small, frequently changing state document. The Durable Object already stores it consistently beside the WebSocket connections. |
 | **R2** | No | Nothing large enough to need object storage. |
 | **Turnstile** | No | No public form to protect. |
 | **Zaraz / Web Analytics** | No | Nobody needs attendance analytics for a church trivia night, and it adds a third-party script to a page that must work offline. |
@@ -246,6 +246,26 @@ curl https://trivia-sync.gogorichie.online/health
 A rollback does **not** clear `HOST_TOKEN`, and it does **not** erase games
 already stored in Durable Object storage. Screens reconnect on their own
 within about 15 seconds, because `sync.js` keeps retrying with a backoff.
+
+### What recovery preserves
+
+Each game code maps to one Durable Object. Its state includes:
+
+- The loaded game and current presentation step.
+- Team names and table numbers.
+- Each round score, manual adjustments, and calculated totals.
+- The current question timer.
+- A revision number that stops an older browser update from replacing newer
+  scores.
+
+The same state is cached in the host browser. If a write fails, the host keeps
+working locally and retries the newest complete state. A fresh host browser
+uses an authenticated read to restore the saved game before it can write.
+
+D1 is not used for this workflow. Durable Objects fit the current need because
+each live game is a small state document with frequent writes and connected
+WebSocket viewers. A future reporting system that needs queries across many
+events could add D1 separately.
 
 ### If you cannot reach the dashboard
 

@@ -51,6 +51,31 @@ function hostIsAuthorized(request, env) {
 function publicView(game, index) {
   if (!game || !Array.isArray(game.rounds)) return null;
   let position = 0;
+  if (position++ === index) return { type: "lobby", title: game.title || "Trivia Night" };
+  for (let round = 0; round < game.rounds.length; round++) {
+    const entry = game.rounds[round] || {};
+    if (position++ === index) return { type: "round", title: entry.name || `Round ${round + 1}` };
+    for (let question = 0; question < (entry.questions || []).length; question++) {
+      const item = entry.questions[question] || {};
+      const common = { round, question, roundName: entry.name || `Round ${round + 1}`, text: item.text || "" };
+      if (position++ === index) return { type: "question", ...common };
+    }
+    for (let question = 0; question < (entry.questions || []).length; question++) {
+      const item = entry.questions[question] || {};
+      const common = { round, question, roundName: entry.name || `Round ${round + 1}`, text: item.text || "" };
+      if (position++ === index) return { type: "answer", ...common, answer: item.answer || "" };
+    }
+    if (position++ === index) return { type: "score", round, title: `Enter scores for ${entry.name || `Round ${round + 1}`}` };
+  }
+  const tie = game.tiebreaker || {};
+  if (position++ === index) return { type: "tiebreaker", text: tie.text || "" };
+  if (position++ === index) return { type: "tiebreaker-answer", text: tie.text || "", answer: tie.answer || "" };
+  return position === index ? { type: "final", title: "Final Results" } : null;
+}
+
+function legacyPublicView(game, index) {
+  if (!game || !Array.isArray(game.rounds)) return null;
+  let position = 0;
   for (let round = 0; round < game.rounds.length; round++) {
     const entry = game.rounds[round] || {};
     if (position++ === index) return { type: "round", title: entry.name || `Round ${round + 1}` };
@@ -62,15 +87,16 @@ function publicView(game, index) {
     }
   }
   const tie = game.tiebreaker || {};
-  return position === index ? { type: "final", text: tie.text || "" } : null;
+  return position === index ? { type: "tiebreaker", text: tie.text || "" } : null;
 }
 
 function publicState(state) {
   return {
+    version: state.version || 1,
     index: state.index,
     teams: (state.teams || []).map((team) => ({ name: team.name || "", score: Number(team.score) || 0 })),
     timer: state.timer || null,
-    view: publicView(state.game, state.index),
+    view: state.version === 2 ? publicView(state.game, state.index) : legacyPublicView(state.game, state.index),
     rev: state.rev || 0,
     updatedAt: state.updatedAt || null,
   };
@@ -85,7 +111,7 @@ export class GameRoom {
 
   async load() {
     if (this.cached === undefined) {
-      this.cached = (await this.state.storage.get("game")) || { index: 0, teams: [], timer: null, game: null, rev: 0 };
+      this.cached = (await this.state.storage.get("game")) || { version: 1, index: 0, teams: [], timer: null, game: null, rev: 0 };
     }
     return this.cached;
   }
@@ -154,6 +180,7 @@ export class GameRoom {
         );
       }
       const next = {
+        version: Number.isInteger(incoming.version) ? incoming.version : current.version || 1,
         index: Number.isInteger(incoming.index) ? incoming.index : current.index,
         teams: Array.isArray(incoming.teams) ? incoming.teams : current.teams,
         // Optional countdown. Stored and relayed as sent; the worker has no

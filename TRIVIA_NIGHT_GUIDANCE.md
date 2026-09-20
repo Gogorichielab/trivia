@@ -3,6 +3,11 @@
 **Game night:** Saturday, September 19, 2026  
 **Prepared:** Friday, September 18, 2026
 
+> **Current app note:** The original one-day build plan below is kept as an
+> event record. The app now uses Cloudflare Pages, Workers, and Durable Objects
+> instead of Firebase. It includes the timer, round scoring, tied rankings,
+> final results, and CSV export that were originally listed as later work.
+
 Building the full app in one day is a stretch. This plan builds a pared-down version today and gets a no-code backup ready first, so the night works even if the app doesn't. You make the go/no-go call at the venue, one hour before start.
 
 ---
@@ -141,7 +146,10 @@ TEAM NAME: ______________________     ROUND: ____
    ask for it: add `&timer=45` to the host address. A phone timer works too.
 3. After question 8: "Pens down, pass your sheets forward."
 4. Reveal answers one by one while a helper grades.
-5. Enter scores, then save; the scoreboard updates.
+5. Use the round score-entry screen to enter each team's total. The overall
+   scoreboard updates automatically.
+6. After the final round, use the tiebreaker when needed, show final results,
+   and download the results CSV.
 
 ### Rules to announce
 

@@ -1,4 +1,57 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Display | St. Peter Trivia</title><link rel="stylesheet" href="styles.css"></head><body><main id="stage" class="stage"></main><div id="timerBar" class="timerbar none" role="timer" aria-live="off" aria-atomic="true" hidden></div><script src="game.js"></script><script src="timer.js"></script><script src="sync.js"></script><script>function render(){const g=loadGame(),s=loadState(),x=s.view||flatten(g)[s.index]||{},roundName=x.roundName||(g.rounds[x.round]||{}).name||"";if(x.type==="round")stage.innerHTML='<div><div class="meta">NEXT ROUND</div><h1 class="round">'+esc(x.title)+'</h1></div>';else if(x.type==="question")stage.innerHTML='<div><div class="meta">'+esc(roundName)+' • Question '+((x.question??x.q)+1)+'</div><h1>'+esc(x.text)+'</h1></div>';else if(x.type==="answer")stage.innerHTML='<div><div class="meta">ANSWER</div><h2>'+esc(x.text)+'</h2><div class="answer">'+esc(x.answer)+'</div></div>';else stage.innerHTML='<div><div class="meta">TIEBREAKER</div><h1>'+esc(x.text)+'</h1></div>'}render();setInterval(render,1000);
-const timerMuted=/^(0|off|false|no)$/i.test(new URLSearchParams(location.search).get("timer")||"");
-function paintTimer(){const v=timerView(timerMuted?null:loadState().timer,Date.now());timerBar.hidden=!v.visible;if(!v.visible)return;timerBar.textContent=v.text;timerBar.setAttribute("aria-label",v.label);timerBar.className="timerbar "+v.state}
-paintTimer();setInterval(paintTimer,250)</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Display | St. Peter Trivia</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="stage" class="stage" aria-live="polite"></main>
+  <div id="timerBar" class="timerbar none" role="timer" aria-live="off" aria-atomic="true" hidden></div>
+  <script src="game.js"></script>
+  <script src="timer.js"></script>
+  <script src="sync.js"></script>
+  <script>
+    let lastScreen = "";
+    function screenHtml(step, state) {
+      const roundName = step.roundName || "";
+      if (step.type === "lobby") return `<div><div class="meta">WELCOME</div><h1>${esc(step.title)}</h1><p class="audience-note">The game will begin shortly.</p></div>`;
+      if (step.type === "round") return `<div><div class="meta">NEXT ROUND</div><h1 class="round">${esc(step.title)}</h1></div>`;
+      if (step.type === "question") return `<div><div class="meta">${esc(roundName)} • Question ${(step.question ?? step.q) + 1}</div><h1>${esc(step.text)}</h1></div>`;
+      if (step.type === "answer") return `<div><div class="meta">ANSWER ${(step.question ?? step.q) + 1}</div><h2>${esc(step.text)}</h2><div class="answer">${esc(step.answer)}</div></div>`;
+      if (step.type === "score") return '<div><div class="meta">ROUND COMPLETE</div><h1>Scores are being entered</h1></div>';
+      if (step.type === "tiebreaker") return `<div><div class="meta">TIEBREAKER</div><h1>${esc(step.text)}</h1></div>`;
+      if (step.type === "tiebreaker-answer") return `<div><div class="meta">TIEBREAKER ANSWER</div><h2>${esc(step.text)}</h2><div class="answer">${esc(step.answer)}</div></div>`;
+      const leaders = rankTeams(state.teams || []).filter((team) => team.rank === 1);
+      const winners = leaders.length ? leaders.map((team) => esc(team.name)).join(" & ") : "Thanks for playing!";
+      return `<div><div class="meta">FINAL RESULTS</div><h1>${winners}</h1><p class="audience-note">${leaders.length ? "Congratulations!" : ""}</p></div>`;
+    }
+    function render() {
+      const game = loadGame();
+      const state = loadState();
+      const step = state.view || flatten(game)[state.index] || {};
+      const signature = JSON.stringify([step, state.teams]);
+      if (signature === lastScreen) return;
+      lastScreen = signature;
+      stage.innerHTML = screenHtml(step, state);
+      stage.classList.remove("screen-change");
+      requestAnimationFrame(() => stage.classList.add("screen-change"));
+    }
+    render();
+    setInterval(render, 1000);
+
+    const timerMuted = /^(0|off|false|no)$/i.test(new URLSearchParams(location.search).get("timer") || "");
+    function paintTimer() {
+      const view = timerView(timerMuted ? null : loadState().timer, Date.now());
+      timerBar.hidden = !view.visible;
+      if (!view.visible) return;
+      timerBar.textContent = view.text;
+      timerBar.setAttribute("aria-label", view.label);
+      timerBar.className = "timerbar " + view.state;
+    }
+    paintTimer();
+    setInterval(paintTimer, 250);
+  </script>
+</body>
+</html>

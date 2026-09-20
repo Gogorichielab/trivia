@@ -26,7 +26,7 @@ const game = {
 
 test("viewer payload exposes only the current public screen", async () => {
   const { GameRoom } = await workerModule();
-  const saved = { value: { index: 1, teams: [{ name: "Team", score: 3, private: "hidden" }], timer: null, game, rev: 4 } };
+  const saved = { value: { version: 2, index: 2, teams: [{ name: "Team", score: 3, private: "hidden" }], timer: null, game, rev: 4 } };
   const room = new GameRoom(roomState(saved), { HOST_TOKEN: "test-token" });
 
   const response = await room.fetch(new Request("https://worker.invalid/game/review001"));
@@ -40,9 +40,24 @@ test("viewer payload exposes only the current public screen", async () => {
   assert.doesNotMatch(JSON.stringify(body), /Secret answer|Private host note|Tie answer/);
 });
 
+test("tiebreaker answer stays private until its reveal step", async () => {
+  const { GameRoom } = await workerModule();
+  const hidden = { value: { version: 2, index: 5, teams: [], timer: null, game, rev: 1 } };
+  const hiddenRoom = new GameRoom(roomState(hidden), { HOST_TOKEN: "test-token" });
+  const question = await (await hiddenRoom.fetch(new Request("https://worker.invalid/game/review001"))).json();
+  assert.equal(question.view.type, "tiebreaker");
+  assert.equal(question.view.answer, undefined);
+
+  const shown = { value: { ...hidden.value, index: 6 } };
+  const shownRoom = new GameRoom(roomState(shown), { HOST_TOKEN: "test-token" });
+  const answer = await (await shownRoom.fetch(new Request("https://worker.invalid/game/review001"))).json();
+  assert.equal(answer.view.type, "tiebreaker-answer");
+  assert.equal(answer.view.answer, "Tie answer");
+});
+
 test("authenticated host can recover the complete saved game", async () => {
   const { GameRoom } = await workerModule();
-  const saved = { value: { index: 1, teams: [], timer: null, game, rev: 4 } };
+  const saved = { value: { version: 2, index: 2, teams: [], timer: null, game, rev: 4 } };
   const room = new GameRoom(roomState(saved), { HOST_TOKEN: "test-token" });
 
   const response = await room.fetch(new Request("https://worker.invalid/game/review001", {

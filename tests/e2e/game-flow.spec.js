@@ -27,6 +27,10 @@ async function importFile(page, file) {
   return log;
 }
 
+async function advance(page, count = 1) {
+  for (let i = 0; i < count; i++) await page.locator("#nextButton").click();
+}
+
 test.describe("the four pages load", () => {
   for (const [name, url] of [
     ["landing", "/index.html"],
@@ -61,8 +65,8 @@ test("host imports the teams spreadsheet", async ({ page }) => {
 
   await expect(log).toHaveClass(/good/);
   await expect(log).toContainText("Loaded 5 teams");
-  await expect(page.locator("#teams .team")).toHaveCount(5);
-  await expect(page.locator("#teams .team input").first()).toHaveValue("The Reformation Ringers");
+  await expect(page.locator("#scoreTable tbody tr")).toHaveCount(5);
+  await expect(page.locator("#scoreTable tbody tr").first().locator("input").first()).toHaveValue("The Reformation Ringers");
 });
 
 test("a sheet it cannot read is reported, not silently swallowed", async ({ page }, testInfo) => {
@@ -76,28 +80,30 @@ test("a sheet it cannot read is reported, not silently swallowed", async ({ page
   await expect(log).toContainText("Headings seen: Foo, Bar");
 });
 
-test("host advances round to question to answer, and back again", async ({ page }) => {
+test("host presents every question before beginning the answer review", async ({ page }) => {
   const code = newGame();
   await openHost(page, code);
   await importFile(page, QUESTIONS);
 
   const current = page.locator("#current");
-  await expect(current).toContainText("ROUND");
+  await expect(current).toContainText("LOBBY");
+
+  await advance(page);
+  await expect(current).toContainText("ROUND INTRO");
   await expect(current).toContainText("Round 1 — General Knowledge");
 
-  await page.getByRole("button", { name: "Next" }).click();
+  await advance(page);
   await expect(current).toContainText("QUESTION");
   await expect(current).toContainText("largest planet");
-  // The answer must not be on screen until the host reveals it.
   await expect(current).not.toContainText("Jupiter");
 
-  await page.getByRole("button", { name: "Next" }).click();
-  await expect(current).toContainText("ANSWER");
+  await advance(page, 8);
+  await expect(current).toContainText("ANSWER 1");
   await expect(current).toContainText("Answer: Jupiter");
 
   await page.getByRole("button", { name: "Back" }).click();
   await expect(current).toContainText("QUESTION");
-  await expect(current).not.toContainText("Jupiter");
+  await expect(current).toContainText("QUESTION 8");
 });
 
 test("the audience display never shows the answer before the host reveals it", async ({ browser }) => {
@@ -110,11 +116,11 @@ test("the audience display never shows the answer before the host reveals it", a
   await importFile(host, QUESTIONS);
   await display.goto(`/display.html?game=${code}`);
 
-  await host.getByRole("button", { name: "Next" }).click(); // -> question
+  await advance(host, 2); // lobby -> round -> first question
   await expect(display.locator("#stage")).toContainText("largest planet", { timeout: 5000 });
   await expect(display.locator("#stage")).not.toContainText("Jupiter");
 
-  await host.getByRole("button", { name: "Next" }).click(); // -> answer
+  await advance(host, 8); // remaining questions -> first answer
   await expect(display.locator("#stage")).toContainText("Jupiter", { timeout: 5000 });
 
   await context.close();
@@ -129,11 +135,10 @@ test("scores change and the scoreboard ranks by total", async ({ browser }) => {
   await importFile(host, TEAMS);
 
   // Give the third team the most points so ranking cannot pass by luck.
-  const plus = host.locator(".team button.small:nth-of-type(2)");
-  await plus.nth(2).click();
-  await plus.nth(2).click();
-  await plus.nth(2).click();
-  await plus.nth(0).click();
+  await host.locator("#scoreTable tbody tr").nth(2).locator("td").nth(2).locator("input").fill("3");
+  await host.locator("#scoreTable tbody tr").nth(2).locator("td").nth(2).locator("input").press("Tab");
+  await host.locator("#scoreTable tbody tr").nth(0).locator("td").nth(2).locator("input").fill("1");
+  await host.locator("#scoreTable tbody tr").nth(0).locator("td").nth(2).locator("input").press("Tab");
 
   const board = await context.newPage();
   await board.goto(`/scoreboard.html?game=${code}`);
@@ -146,6 +151,35 @@ test("scores change and the scoreboard ranks by total", async ({ browser }) => {
   await context.close();
 });
 
+test("host downloads a CSV with round scores and totals", async ({ page }) => {
+  const code = newGame();
+  await openHost(page, code);
+  await importFile(page, QUESTIONS);
+  await importFile(page, TEAMS);
+  const score = page.locator("#scoreTable tbody tr").first().locator("td").nth(2).locator("input");
+  await score.fill("6");
+  await score.press("Tab");
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download Results" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe(code + "-results.csv");
+  const contents = require("node:fs").readFileSync(await download.path(), "utf8");
+  expect(contents).toContain("Rank,Team,Table");
+  expect(contents).toContain("The Reformation Ringers");
+  expect(contents).toContain(",6,");
+});
+
+test("presentation transitions respect reduced motion", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(`/display.html?game=${newGame()}`);
+  const animation = await page.locator("#stage").evaluate((element) => {
+    element.classList.add("screen-change");
+    return getComputedStyle(element).animationName;
+  });
+  expect(animation).toBe("none");
+});
+
 test("state and scores survive a refresh of every window", async ({ browser }) => {
   const code = newGame();
   const context = await browser.newContext();
@@ -154,15 +188,15 @@ test("state and scores survive a refresh of every window", async ({ browser }) =
   await openHost(host, code);
   await importFile(host, QUESTIONS);
   await importFile(host, TEAMS);
-  await host.getByRole("button", { name: "Next" }).click();
-  await host.getByRole("button", { name: "Next" }).click();
-  await host.locator("#teams .team button.small").nth(1).click(); // first team +1
+  await advance(host, 2);
+  const firstRoundScore = host.locator("#scoreTable tbody tr").first().locator("td").nth(2).locator("input");
+  await firstRoundScore.fill("1");
+  await firstRoundScore.press("Tab");
 
   await host.reload();
-  await expect(host.locator("#current")).toContainText("ANSWER");
-  await expect(host.locator("#current")).toContainText("Jupiter");
-  await expect(host.locator("#teams .team").first()).toContainText("1 pts");
-  await expect(host.locator("#teams .team")).toHaveCount(5);
+  await expect(host.locator("#current")).toContainText("QUESTION 1");
+  await expect(host.locator("#scoreTable tbody tr").first().locator(".total")).toHaveText("1");
+  await expect(host.locator("#scoreTable tbody tr")).toHaveCount(5);
 
   await context.close();
 });
@@ -177,10 +211,10 @@ test("a team name containing quotes and angle brackets is shown as text", async 
   require("node:fs").writeFileSync(tricky, 'team_name,table_number\n"The ""Quotables""",1\n<b>Bold</b> Movers,2\n');
   await importFile(host, tricky);
 
-  await expect(host.locator("#teams .team")).toHaveCount(2);
-  await expect(host.locator("#teams .team input").first()).toHaveValue('The "Quotables"');
+  await expect(host.locator("#scoreTable tbody tr")).toHaveCount(2);
+  await expect(host.locator("#scoreTable tbody tr").first().locator("input").first()).toHaveValue('The "Quotables"');
   // If the markup had been injected rather than escaped, this <b> would exist.
-  await expect(host.locator("#teams .team b")).toHaveCount(0);
+  await expect(host.locator("#scoreTable tbody b")).toHaveCount(0);
 
   const board = await context.newPage();
   await board.goto(`/scoreboard.html?game=${code}`);
@@ -191,14 +225,18 @@ test("a team name containing quotes and angle brackets is shown as text", async 
   await context.close();
 });
 
-test("reset clears scores after confirmation", async ({ page }) => {
+test("reset clears scores after confirmation and keeps team names", async ({ page }) => {
   await openHost(page, newGame());
   await importFile(page, TEAMS);
-  await expect(page.locator("#teams .team")).toHaveCount(5);
+  await expect(page.locator("#scoreTable tbody tr")).toHaveCount(5);
+  const score = page.locator("#scoreTable tbody tr").first().locator("td").nth(2).locator("input");
+  await score.fill("4");
+  await score.press("Tab");
 
   page.once("dialog", (d) => d.accept());
-  await page.getByRole("button", { name: "Reset" }).click();
-  await expect(page.locator("#teams .team")).toHaveCount(0);
+  await page.getByRole("button", { name: "Reset Game" }).click();
+  await expect(page.locator("#scoreTable tbody tr")).toHaveCount(5);
+  await expect(page.locator("#scoreTable tbody tr").first().locator(".total")).toHaveText("0");
 });
 
 test("question text is large enough to read from the back of the room", async ({ page }) => {
@@ -206,7 +244,7 @@ test("question text is large enough to read from the back of the room", async ({
   const host = await page.context().newPage();
   await openHost(host, code);
   await importFile(host, QUESTIONS);
-  await host.getByRole("button", { name: "Next" }).click();
+  await advance(host, 2);
 
   await page.goto(`/display.html?game=${code}`);
   const heading = page.locator("#stage h1");
