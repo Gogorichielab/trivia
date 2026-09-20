@@ -1,7 +1,7 @@
 /* Cross-laptop sync through the Cloudflare Worker.
  *
  * Two separate browser contexts have separate local storage, so they stand in
- * for the two church laptops. Without sync they cannot see each other at all;
+ * for the two host laptops. Without sync they cannot see each other at all;
  * with sync the display follows the host.
  *
  * Needs the worker running. Start it with:
@@ -93,7 +93,7 @@ test("the scoreboard on a second laptop follows the scores", async ({ browser })
   await firstScore.fill("1");
   await firstScore.press("Tab");
 
-  await expect(board.locator(".row").first()).toContainText("The Mighty Lutherans", { timeout: 15000 });
+  await expect(board.locator(".row").first()).toContainText("Trivia Newton-John", { timeout: 15000 });
   await expect(board.locator(".row").first()).toContainText("2");
 
   await laptopA.close();

@@ -165,7 +165,7 @@ function importQuestions(rows, headings, meta = {}) {
     });
 
   const game = {
-    title: meta.title || "St. Peter Trivia Night",
+    title: meta.title || "Trivia Night",
     rounds,
     tiebreaker: tiebreakers[0] || { text: "Tiebreaker", answer: "" },
   };

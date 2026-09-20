@@ -1,6 +1,6 @@
 const STATE_VERSION = 2;
 const defaultGame = {
-  title: "St. Peter Trivia Night",
+  title: "Trivia Night",
   rounds: [{
     name: "Round 1 — General Knowledge",
     questions: [{ text: "Sample question: Replace this with Question 1.", answer: "Sample answer", difficulty: "easy" }],

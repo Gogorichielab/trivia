@@ -1,14 +1,11 @@
 # Trivia Night Plan
 
-**Game night:** Saturday, September 19, 2026  
-**Prepared:** Friday, September 18, 2026
+A reusable playbook for running one trivia night with this app. Copy it, fill
+in your own dates and names, and work down it.
 
-> **Current app note:** The original one-day build plan below is kept as an
-> event record. The app now uses Cloudflare Pages, Workers, and Durable Objects
-> instead of Firebase. It includes the timer, round scoring, tied rankings,
-> final results, and CSV export that were originally listed as later work.
-
-Building the full app in one day is a stretch. This plan builds a pared-down version today and gets a no-code backup ready first, so the night works even if the app doesn't. You make the go/no-go call at the venue, one hour before start.
+The short version: **write the questions first, get the no-app backup ready
+second, and make the go/no-go call at the venue one hour before start.** The
+night should be able to happen whether or not the app cooperates.
 
 ---
 
@@ -21,41 +18,44 @@ Work in this order. Each step is useful even if you never reach the next one.
 | 1 | Write the questions (Section 3) | 2–3 hrs | Both the app and Plan B need them |
 | 2 | Build Plan B: slides and a score spreadsheet (Section 5) | 45 min | Guarantees the night happens |
 | 3 | Print answer sheets and the answer key | 30 min | Needed either way |
-| 4 | Build the app MVP (Section 2) | 4–6 hrs | Nice to have for tomorrow |
-| 5 | Rehearse on both laptops | 30 min | Finds problems while you can still fix them |
+| 4 | Load the game file and rehearse on both laptops | 30 min | Finds problems while you can still fix them |
+| 5 | Confirm sync, Access, and the deployed site | 30 min | Only matters if you are using two laptops |
 
 ---
 
-## 2. App Build Schedule (Today)
+## 2. Prep Schedule
 
-### What to build for tomorrow (MVP)
+### Two weeks out
 
-| Build it | Skip until after tomorrow |
-| --- | --- |
-| Phase 1: three pages live on GitHub Pages | Host sign-in (Phase 3) |
-| Phase 2: Firebase sync between laptops | Animations and fancy transitions |
-| Phase 4: load the game file, then Next/Back through the states | Images in questions |
-| Basic score grid that saves to Firebase | CSV converter, Download scores button |
-| Big, readable text on display and scoreboard | Countdown timer (optional; off unless you add `&timer=45`) |
+- [ ] Pick the date, venue, and start time; confirm the room has a TV or projector.
+- [ ] Decide the round categories (Section 3) and who is writing each one.
+- [ ] Confirm who is hosting and who is grading.
 
-### Security shortcut for one night
+### One week out
 
-Skipping sign-in means using Firebase "test mode" rules, which let anyone write. To lower the risk:
+- [ ] Questions written, fact-checked, and read aloud once.
+- [ ] Question and team spreadsheets saved in the importer's column format.
+- [ ] Plan B deck and score spreadsheet built from the same questions.
 
-- Use a long, random game code (like `?game=k7Qm29xRtp`), not `FALL26`.
+### Two days out
+
+- [ ] Full rehearsal: load the game file, click lobby → tiebreaker, refresh every screen.
+- [ ] Both laptops tested on the actual cables and display.
+- [ ] Answer sheets, answer key, and tally sheet printed.
+
+### Game day
+
+- [ ] Supplies packed (Section 6).
+- [ ] Known-good copy of the game file saved locally on the host laptop.
+- [ ] Run-of-show (Section 4) in hand.
+
+### Security note for a single night
+
+If you are running without host sign-in, lower the risk the cheap way:
+
+- Use a long, random game code (like `?game=k7Qm29xRtp`), not something guessable.
 - Don't share the display or scoreboard URLs with guests.
-- Delete the game data from Firebase afterward, and add sign-in (Phase 3) before the next event.
-
-### Time blocks
-
-| Block | Work | Done when |
-| --- | --- | --- |
-| 1 (1 hr) | Repo, three pages, turn on Pages | All three URLs load on both laptops |
-| 2 (1.5 hrs) | Firebase project, test-mode rules, sync | Next on Laptop A changes Laptop B |
-| 3 (1.5 hrs) | Load game file; Lobby → RoundIntro → Question → AnswerReveal → ScoreEntry → Final | You can click through a whole round |
-| 4 (1 hr) | Score grid and ranked scoreboard | Scores survive refreshing every page |
-| 5 (30 min) | Big fonts, 1920 × 1080 layout | Readable from 20 feet away |
-| **Checkpoint** | **Tonight, before bed** | **If Block 3 isn't working, stop building and use Plan B** |
+- Delete the game data after the event.
 
 ### Pushing code on game day
 
@@ -99,7 +99,7 @@ Game-day pushes are allowed, but gated. See **Game-Day Change Policy** in
 - [ ] Read each question aloud once; cut any that take more than 15 seconds to read
 - [ ] Two spare questions, in case one gets spoiled or thrown out
 - [ ] Double-check facts from a second source
-- [ ] Save as `fall-trivia.game.json` (for the app) **and** paste into the Plan B slides
+- [ ] Save as a game file (see `example.game.json`) **and** paste into the Plan B slides
 
 ### Answer sheet (print one per team per round, plus spares)
 
@@ -162,7 +162,7 @@ TEAM NAME: ______________________     ROUND: ____
 
 ## 5. Plan B (No App)
 
-Build this before the app, so you're covered no matter what.
+Build this before you rely on the app, so you're covered no matter what.
 
 - **Question display:** a Google Slides or PowerPoint deck on Laptop B and the projector. Make one slide for each category card, one for each question, and one for each answer, in the reveal order.
 - **Scoreboard:** a Google Sheet on Laptop A's TV, with columns for Team, R1–R5, and Total. Sort by Total after each round, and zoom to 200%.
@@ -188,9 +188,9 @@ Switching from the app to Plan B should take about 5 minutes. Keep both open unt
 
 ---
 
-## 7. After Tomorrow
+## 7. After the Event
 
-- [ ] Delete tonight's game data from Firebase
-- [ ] Add host sign-in and locked-down rules (Phase 3)
-- [ ] Add a timer, animations, and the Download scores button
-- [ ] Note what dragged or confused people, and fix it for next time
+- [ ] Delete the event's game data from the sync Worker
+- [ ] Archive the question file so the same questions aren't reused by accident
+- [ ] Note what dragged or confused people, and fix it before the next one
+- [ ] File any app bugs you hit while they're still fresh

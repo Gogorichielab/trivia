@@ -31,12 +31,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for file in index.html host.html display.html scoreboard.html styles.css game.js import.js timer.js fall-trivia.game.json vendor/papaparse.min.js vendor/xlsx.full.min.js; do
+          for file in index.html host.html display.html scoreboard.html styles.css game.js import.js timer.js example.game.json vendor/papaparse.min.js vendor/xlsx.full.min.js; do
             test -s "$file" || { echo "::error file=$file::Missing or empty required file"; exit 1; }
           done
 
       - name: Validate game JSON
-        run: python -m json.tool fall-trivia.game.json > /dev/null
+        run: python -m json.tool example.game.json > /dev/null
 
       - name: Validate mock CSV data
         shell: python
@@ -79,7 +79,7 @@ jobs:
           import json, os
           from pathlib import Path
 
-          game = json.loads(Path("fall-trivia.game.json").read_text())
+          game = json.loads(Path("example.game.json").read_text())
           rounds = game.get("rounds", [])
           counts = [len(r.get("questions", [])) for r in rounds]
           text = json.dumps(game).lower()
@@ -92,10 +92,10 @@ jobs:
               notes.append(f"rounds {thin} have fewer than 8 questions (counts: {counts})")
 
           if notes:
-              print("::warning file=fall-trivia.game.json::Development fixture, not event content: "
+              print("::warning file=example.game.json::Development fixture, not event content: "
                     + "; ".join(notes))
           else:
-              print(f"fall-trivia.game.json: {len(rounds)} rounds, {sum(counts)} questions")
+              print(f"example.game.json: {len(rounds)} rounds, {sum(counts)} questions")
 
   test:
     name: Unit and browser tests
@@ -167,7 +167,7 @@ jobs:
 
       # Publish the app shell only. Anything published is world-readable, so
       # question and answer data stays out of it: mock/ holds an answer key,
-      # and fall-trivia.game.json would hold the real one. The host loads the
+      # and example.game.json would hold the real one. The host loads the
       # game file from the laptop through the file picker.
       - name: Assemble site
         shell: bash
@@ -208,7 +208,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy _site --project-name=st-peter-trivia --branch=main
+          command: pages deploy _site --project-name=trivia --branch=main
 
   deploy-worker:
     name: Deploy sync worker

@@ -15,7 +15,7 @@ module.exports = defineConfig({
   projects: [
     {
       name: "chromium",
-      // The church laptops drive a 1920x1080 TV; test at that size.
+      // Host laptops typically drive a 1920x1080 TV; test at that size.
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1920, height: 1080 },

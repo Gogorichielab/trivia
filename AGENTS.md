@@ -2,21 +2,21 @@
 
 ## Purpose
 
-This repository contains the **St. Peter Trivia Night** application for St. Peter Evangelical Lutheran Church in Gilberts, Illinois.
+This repository contains the **Trivia Night** application: a browser-based tool for running a live trivia game at any venue.
 
-AI coding agents working in this repository should prioritize **game-night reliability, readability, and simplicity** over architectural sophistication. The immediate event is Saturday, September 19, 2026.
+AI coding agents working in this repository should prioritize **game-night reliability, readability, and simplicity** over architectural sophistication. The app is reused for one event after another, so every change has to survive somebody else's game night, not just the next one.
 
 ## Read First
 
 Before making changes, review:
 
 1. `README.md` — current application architecture and status.
-2. `TRIVIA_NIGHT_GUIDANCE.md` — event plan, priorities, run-of-show, and MVP scope.
+2. `TRIVIA_NIGHT_GUIDANCE.md` — reusable event plan, priorities, and run-of-show.
 3. `MOCK_DATA.md` — temporary spreadsheet schemas.
-4. `fall-trivia.game.json` — current game-data structure.
-5. `docs/CLOUDFLARE.md` — hosting, sync, Access, and the post-event cleanup.
+4. `example.game.json` — game-data structure.
+5. `docs/CLOUDFLARE.md` — hosting, sync, Access, and post-event cleanup.
 
-Treat the guidance document as the product requirements for the event.
+Treat the guidance document as the product requirements for a game night.
 
 ## Primary Goal
 
@@ -28,13 +28,13 @@ The app should reliably support a live trivia event using:
 - Team score tracking.
 - Approximately five rounds of eight questions.
 - A tiebreaker.
-- Large, readable presentation on church TVs/projectors.
+- Large, readable presentation on venue TVs/projectors.
 
 The host should be able to operate the game without technical knowledge during the event.
 
 ## MVP Priorities
 
-For the September 19 event, prioritize work in this order:
+For any upcoming event, prioritize work in this order:
 
 1. Reliable question and answer presentation.
 2. Reliable team and score handling.
@@ -55,9 +55,9 @@ laptop if any of it is unavailable.
 
 | Concern | Choice | Notes |
 | --- | --- | --- |
-| Hosting | **Cloudflare Pages** | `st-peter-trivia`, served at `https://trivia.gogorichie.online`. Direct upload; no build command. |
+| Hosting | **Cloudflare Pages** | `trivia`, served at `https://trivia.gogorichie.online`. Direct upload; no build command. |
 | Host authentication | **Cloudflare Access** | Path-scoped to `trivia.gogorichie.online/host*`. Viewer pages stay open. |
-| Cross-laptop sync | **Cloudflare Workers** + **Durable Objects** | `st-peter-trivia-sync` at `https://trivia-sync.gogorichie.online`. One Durable Object per game code. |
+| Cross-laptop sync | **Cloudflare Workers** + **Durable Objects** | `trivia-sync` at `https://trivia-sync.gogorichie.online`. One Durable Object per game code. |
 | Spreadsheet import | **PapaParse** + **SheetJS** | Vendored under `vendor/`, never a CDN. |
 | Unit tests | **node:test** | Built in; no test framework dependency. |
 | Browser tests | **Playwright** | Run at 1920x1080 against the real pages. |
@@ -98,7 +98,7 @@ Important files:
 - `styles.css` — shared presentation styling.
 - `vendor/` — PapaParse and SheetJS, vendored.
 - `worker/` — the Cloudflare Worker and its Durable Object.
-- `fall-trivia.game.json` — development game file.
+- `example.game.json` — example game file.
 - `mock/questions.csv`, `mock/teams.csv` — temporary fixtures.
 
 Avoid introducing a framework or build system unless there is a clear,
@@ -205,7 +205,7 @@ than failing the build.
 ## Question Timer
 
 An optional per-question countdown, implemented in `timer.js` for #10. It is a
-post-event feature that shipped on game day, which was only reasonable because
+feature that shipped on a game day, which was only reasonable because
 it is off unless asked for.
 
 The rules that matter when changing it:
@@ -374,7 +374,7 @@ why none of it needs publishing.
 
 Checking this from outside needs care. Pages answers **200 with the landing
 page** for any path it does not have, so a status-code check on
-`/mock/questions.csv` or `/fall-trivia.game.json` returns 200 whether or not the
+`/mock/questions.csv` or `/example.game.json` returns 200 whether or not the
 file was published. Compare the response body or its content type, never the
 status code alone. The CI step above inspects the publish directory directly,
 which is why that is the check that counts.
@@ -560,7 +560,7 @@ On game day, change only what the event needs to run:
 
 - Bugs that block the host, display, scoreboard, or scoring.
 - Getting the real question and team data into the app.
-- Readability fixes on the actual church display equipment.
+- Readability fixes on the actual venue display equipment.
 
 Do not, on game day:
 
@@ -617,22 +617,22 @@ Do not make operational plans depend exclusively on the web app until it has pas
 
 The MVP is ready for game night when:
 
-- The final question spreadsheet imports successfully.
-- The final team spreadsheet imports successfully.
+- The event's question spreadsheet imports successfully.
+- The event's team spreadsheet imports successfully.
 - Host, display and scoreboard work on the intended laptops.
 - Cross-laptop state synchronisation is reliable, and the host badge reads
   **Sync live**.
 - Scores survive refresh and reconnect.
 - The full game can be rehearsed from lobby through tiebreaker.
-- Text is readable on the actual church display equipment.
+- Text is readable on the actual venue display equipment.
 - `npm test` passes and CI is green.
 - `/host` and `/host.html` both redirect to Cloudflare Access; `/display` and
   `/scoreboard` do not.
 - A no-code backup is ready.
 
-## After the Event
+## Between Events
 
-Post-event improvements may include:
+Work that belongs in the quiet stretch between game nights:
 
 - Tighter Cloudflare Access policies and a shorter Access session.
 - Animations and transitions.
@@ -641,7 +641,7 @@ Post-event improvements may include:
 - Score downloads/exports.
 - Improved administration tools.
 
-These features should not compromise the stability of the event MVP.
+These features should not compromise the stability of the core game flow.
 
-The countdown timer that was on this list shipped on game day (#10, PR #31).
+The countdown timer that was on this list shipped on a game day (#10, PR #31).
 See **Question Timer** above for the rules it has to keep.
