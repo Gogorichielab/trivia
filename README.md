@@ -163,10 +163,10 @@ Question and answer files are also kept out of the public deployment. The host l
 
 ## Testing
 
-Install the development packages:
+Install the exact development package versions from the lockfile:
 
 ```bash
-npm install
+npm ci
 ```
 
 Run all tests:
@@ -182,7 +182,9 @@ npm run test:unit
 npm run test:e2e
 ```
 
-The browser tests check important game behavior such as importing files, moving from question to answer, scoring teams, refreshing the browser, and keeping answers hidden until the host reveals them.
+The browser tests check important game behavior such as importing files,
+showing every question before answer review, scoring teams, refreshing the
+browser, and keeping answers hidden until the host reveals them.
 
 Cross-laptop sync tests use a local Cloudflare Worker and are documented in `docs/CLOUDFLARE.md`.
 

@@ -271,14 +271,14 @@ To deploy by hand:
 ```bash
 # Worker
 cd worker
-npm install
+npm ci
 npx wrangler login
 npx wrangler deploy
 
 # App
 cd ..
 rm -rf _site && mkdir _site
-cp index.html host.html display.html scoreboard.html styles.css game.js import.js sync.js _site/
+cp index.html host.html display.html scoreboard.html styles.css game.js import.js timer.js sync.js _site/
 cp -r vendor _site/vendor
 npx wrangler pages deploy _site --project-name=trivia --branch=main
 ```
