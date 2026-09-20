@@ -42,6 +42,40 @@ function tokensMatch(a, b) {
   return diff === 0;
 }
 
+function hostIsAuthorized(request, env) {
+  return Boolean(env.HOST_TOKEN) && tokensMatch(request.headers.get("x-host-token") || "", env.HOST_TOKEN);
+}
+
+/* Build the one screen viewers may see. The complete game contains the answer
+ * key and host notes, so it must never cross the public API. */
+function publicView(game, index) {
+  if (!game || !Array.isArray(game.rounds)) return null;
+  let position = 0;
+  for (let round = 0; round < game.rounds.length; round++) {
+    const entry = game.rounds[round] || {};
+    if (position++ === index) return { type: "round", title: entry.name || `Round ${round + 1}` };
+    for (let question = 0; question < (entry.questions || []).length; question++) {
+      const item = entry.questions[question] || {};
+      const common = { round, question, roundName: entry.name || `Round ${round + 1}`, text: item.text || "" };
+      if (position++ === index) return { type: "question", ...common };
+      if (position++ === index) return { type: "answer", ...common, answer: item.answer || "" };
+    }
+  }
+  const tie = game.tiebreaker || {};
+  return position === index ? { type: "final", text: tie.text || "" } : null;
+}
+
+function publicState(state) {
+  return {
+    index: state.index,
+    teams: (state.teams || []).map((team) => ({ name: team.name || "", score: Number(team.score) || 0 })),
+    timer: state.timer || null,
+    view: publicView(state.game, state.index),
+    rev: state.rev || 0,
+    updatedAt: state.updatedAt || null,
+  };
+}
+
 export class GameRoom {
   constructor(state, env) {
     this.state = state;
@@ -82,7 +116,7 @@ export class GameRoom {
       this.sockets.add(server);
 
       // Send current state immediately, so a reconnecting screen catches up.
-      server.send(JSON.stringify({ type: "state", state: await this.load() }));
+      server.send(JSON.stringify({ type: "state", state: publicState(await this.load()) }));
 
       server.addEventListener("close", () => this.sockets.delete(server));
       server.addEventListener("error", () => this.sockets.delete(server));
@@ -91,7 +125,8 @@ export class GameRoom {
     }
 
     if (request.method === "GET") {
-      return json(await this.load(), {}, this.env);
+      const state = await this.load();
+      return json(hostIsAuthorized(request, this.env) ? state : publicState(state), {}, this.env);
     }
 
     if (request.method === "POST") {
@@ -111,6 +146,13 @@ export class GameRoom {
       }
 
       const current = await this.load();
+      if (Number.isInteger(incoming.baseRev) && incoming.baseRev !== (current.rev || 0)) {
+        return json(
+          { error: "Game state changed; refresh before writing.", state: current },
+          { status: 409 },
+          this.env
+        );
+      }
       const next = {
         index: Number.isInteger(incoming.index) ? incoming.index : current.index,
         teams: Array.isArray(incoming.teams) ? incoming.teams : current.teams,
@@ -122,7 +164,7 @@ export class GameRoom {
         updatedAt: new Date().toISOString(),
       };
       await this.save(next);
-      this.broadcast({ type: "state", state: next });
+      this.broadcast({ type: "state", state: publicState(next) });
       return json(next, {}, this.env);
     }
 

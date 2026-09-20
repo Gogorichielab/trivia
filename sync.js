@@ -1,37 +1,21 @@
-/* Optional cross-laptop sync through the Cloudflare Worker in worker/.
- *
- * This file is deliberately additive. When sync is not configured, or the
- * worker is unreachable, every page behaves exactly as it did before: local
- * storage stays the source of truth and the worker is only a way of pushing
- * that state to the other laptop. A sync outage must never take the game down.
- *
- * On the deployed site, sync is on by default and points at the production
- * worker, so game-night URLs stay short:
- *   https://trivia.gogorichie.online/host?game=<code>&token=<host token>
- *   https://trivia.gogorichie.online/display?game=<code>
- *   https://trivia.gogorichie.online/scoreboard?game=<code>
- *
- * Anywhere else -- localhost, a file:// copy, a test run -- sync stays off
- * unless a ?sync= URL is given. That keeps local work and the test suite off
- * the production worker, and keeps a laptop copy working with no network.
- *
- * The token belongs on the host screen only. Without it a screen can read the
- * game but cannot change it, which is what keeps the audience display from
- * being able to alter a score. The host console is additionally behind
- * Cloudflare Access; see docs/CLOUDFLARE.md.
- */
-
+/* Optional cross-laptop sync through the Cloudflare Worker in worker/. */
 (function () {
   const params = new URLSearchParams(location.search);
   const CONFIG_KEY = gameKey() + ":sync";
-
-  // The deployed site talks to the production worker without being told to.
-  // Any other origin must opt in with ?sync=, so tests and offline copies
-  // never reach for the network.
   const PRODUCTION_HOST = "trivia.gogorichie.online";
   const PRODUCTION_SYNC = "https://trivia-sync.gogorichie.online";
+  const isHostPage = /\/(host|host\.html)$/.test(location.pathname);
 
-  // Remembered per game code, so a refresh does not need the URL again.
+  function isLocalSync(url) {
+    try {
+      const parsed = new URL(url);
+      return ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname) &&
+        ["http:", "https:"].includes(parsed.protocol);
+    } catch {
+      return false;
+    }
+  }
+
   function readConfig() {
     let stored = {};
     try {
@@ -40,35 +24,59 @@
       stored = {};
     }
     const onProduction = location.hostname === PRODUCTION_HOST;
-    const url = params.get("sync") || stored.url || (onProduction ? PRODUCTION_SYNC : "");
-    const token = params.get("token") || stored.token || "";
-    if (url) {
+    const requested = params.get("sync");
+    let url = onProduction ? PRODUCTION_SYNC : requested || stored.url || "";
+    let error = "";
+    if (
+      requested &&
+      ((onProduction && requested.replace(/\/+$/, "") !== PRODUCTION_SYNC) ||
+        (!onProduction && !isLocalSync(requested)))
+    ) {
+      error = "Untrusted sync address rejected";
+      url = onProduction ? PRODUCTION_SYNC : "";
+    }
+    if (!onProduction && url && !isLocalSync(url)) {
+      error = "Untrusted saved sync address removed";
+      url = "";
+    }
+    url = url.replace(/\/+$/, "");
+    const suppliedToken = isHostPage ? params.get("token") || "" : "";
+    const legacyTokenIsTrusted =
+      !stored.tokenUrl &&
+      String(stored.url || "").replace(/\/+$/, "") === url &&
+      (onProduction ? url === PRODUCTION_SYNC : isLocalSync(url));
+    const hasHostStorage = Boolean(stored.token) && (stored.tokenUrl === url || legacyTokenIsTrusted);
+    const token = isHostPage && (suppliedToken || hasHostStorage)
+      ? suppliedToken || stored.token || ""
+      : "";
+    if (url && isHostPage) {
       try {
-        localStorage.setItem(CONFIG_KEY, JSON.stringify({ url, token }));
+        localStorage.setItem(CONFIG_KEY, JSON.stringify({ url, token, tokenUrl: token ? url : "" }));
       } catch {
-        /* private window; carry on without remembering */
+        /* private window */
+      }
+    } else if (error) {
+      try {
+        localStorage.removeItem(CONFIG_KEY);
+      } catch {
+        /* private window */
       }
     }
-    return { url: url.replace(/\/+$/, ""), token };
+    return { url, token, error, hasHostStorage };
   }
 
-  const { url, token } = readConfig();
-  // A host page is authoritative even when no sync token was supplied. Without
-  // this guard, production sync treats /host as a viewer, immediately applies
-  // the worker's state, and can overwrite locally imported teams/questions.
-  const isHostPage = /\/(host|host\.html)$/.test(location.pathname);
-
-  // Tell the host what sync is doing. Silence during a game is the one thing
-  // worse than no sync at all, so this is visible rather than console-only.
+  const { url, token, error: configError, hasHostStorage } = readConfig();
   const listeners = [];
-  let status = url ? "connecting" : "off";
+  let status = configError ? "error" : url ? "connecting" : "off";
+  let statusDetail = configError;
   window.syncStatus = () => status;
   window.onSyncStatus = (fn) => {
     listeners.push(fn);
-    fn(status);
+    fn(status, statusDetail);
   };
   function setStatus(next, detail) {
     status = next;
+    statusDetail = detail || "";
     listeners.forEach((fn) => {
       try {
         fn(next, detail);
@@ -78,62 +86,105 @@
     });
   }
 
-  if (!url) return; // not configured: pages keep working on local storage alone
-
+  if (!url) return;
   const base = `${url}/game/${encodeURIComponent(params.get("game") || "default")}`;
+  let knownRev = 0;
+  let pending = null;
+  let sending = false;
+  let socketOpen = false;
+  let localDirty = false;
 
-  /* ---- host -> worker -------------------------------------------------- */
+  function storeRemoteState(state) {
+    localStorage.setItem(
+      gameKey(),
+      JSON.stringify({
+        index: state.index,
+        teams: state.teams || [],
+        timer: state.timer || null,
+        view: state.view || null,
+      })
+    );
+    if (state.game) localStorage.setItem(gameKey() + ":game", JSON.stringify(state.game));
+    else if (state.view && !isHostPage && !hasHostStorage) localStorage.removeItem(gameKey() + ":game");
+    knownRev = Number.isInteger(state.rev) ? state.rev : knownRev;
+    window.dispatchEvent(new CustomEvent("trivia-sync-state", { detail: state }));
+    if (typeof window.render === "function") window.render();
+  }
 
-  // Wrap saveState rather than replacing it: local storage is still written
-  // first, so the host keeps working if the POST fails.
+  async function pump() {
+    if (sending || !pending || !token) return;
+    sending = true;
+    const next = pending;
+    pending = null;
+    try {
+      const response = await fetch(base, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-host-token": token },
+        body: JSON.stringify({ ...next, baseRev: knownRev }),
+        keepalive: true,
+      });
+      const result = await response.json().catch(() => null);
+      if (response.ok) {
+        knownRev = result && Number.isInteger(result.rev) ? result.rev : knownRev + 1;
+      } else {
+        pending = pending || next;
+        if (response.status === 409) {
+          setStatus("error", "Another host changed the game — reload before continuing");
+        } else if (response.status === 403) {
+          setStatus("error", "Host token rejected");
+        } else {
+          setStatus("error", `Worker returned ${response.status}`);
+        }
+      }
+    } catch {
+      pending = pending || next;
+      setStatus("offline", "Changes saved on this laptop; reconnecting…");
+    } finally {
+      sending = false;
+      if (!pending && socketOpen) setStatus("live");
+      else if (pending && socketOpen && status !== "error") setTimeout(pump, 1000);
+    }
+  }
+
   if (token && typeof window.saveState === "function") {
     const localSave = window.saveState;
     window.saveState = function (state) {
       localSave(state);
-      const body = JSON.stringify({ index: state.index, teams: state.teams, timer: state.timer || null, game: loadGame() });
-      fetch(base, {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-host-token": token },
-        body,
-        keepalive: true,
-      })
-        .then((r) => {
-          if (r.ok) setStatus("live");
-          else if (r.status === 403) setStatus("error", "Host token rejected");
-          else setStatus("error", `Worker returned ${r.status}`);
-        })
-        .catch(() => setStatus("offline", "Could not reach the worker"));
+      localDirty = true;
+      pending = {
+        index: state.index,
+        teams: state.teams,
+        timer: state.timer || null,
+        game: loadGame(),
+      };
+      pump();
     };
   }
 
-  /* ---- worker -> screens ----------------------------------------------- */
+  /* Restore a live game before a fresh host can replace it with local defaults.
+   * A host action made while this request is loading still wins. */
+  if (isHostPage && token) {
+    fetch(base, { headers: { "x-host-token": token } })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Worker returned ${response.status}`);
+        const state = await response.json();
+        knownRev = state.rev || 0;
+        if (!localDirty && state.rev > 0) storeRemoteState(state);
+      })
+      .catch((err) => setStatus("offline", err.message));
+  }
 
   let socket = null;
   let backoff = 1000;
   let closed = false;
-
   function applyState(state) {
     if (!state || typeof state !== "object") return;
     try {
-      const local = loadState();
-      // The host is authoritative for its own screen; it posts, it does not
-      // take state back from the worker. Viewers follow.
-      if (!token && !isHostPage) {
-        localStorage.setItem(
-          gameKey(),
-          JSON.stringify({ index: state.index, teams: state.teams || [], timer: state.timer || null })
-        );
-        if (state.game) localStorage.setItem(gameKey() + ":game", JSON.stringify(state.game));
-        // Never reload in response to sync. A socket can deliver its first
-        // state before a page's inline render() function exists; reloading at
-        // that moment creates a permanent reload loop.
-        if (typeof window.render === "function") window.render();
-      }
+      if (!token && !isHostPage) storeRemoteState(state);
     } catch {
       /* a malformed push must not wedge the screen */
     }
   }
-
   function connect() {
     if (closed) return;
     const wsUrl = base.replace(/^http/, "ws") + "/ws";
@@ -143,10 +194,19 @@
       setStatus("offline", "Could not open a socket");
       return retry();
     }
-
     socket.addEventListener("open", () => {
       backoff = 1000;
-      setStatus("live");
+      socketOpen = true;
+      if (configError) {
+        setStatus("error", configError);
+      } else if (isHostPage && !token) {
+        setStatus("error", "Host token required for live updates");
+      } else if (pending) {
+        setStatus("connecting", "Sending saved changes…");
+        pump();
+      } else {
+        setStatus("live");
+      }
     });
     socket.addEventListener("message", (event) => {
       try {
@@ -157,26 +217,20 @@
       }
     });
     socket.addEventListener("close", () => {
+      socketOpen = false;
       setStatus("offline", "Reconnecting…");
       retry();
     });
-    socket.addEventListener("error", () => {
-      setStatus("offline", "Connection error");
-    });
+    socket.addEventListener("error", () => setStatus("offline", "Connection error"));
   }
-
   function retry() {
     if (closed) return;
-    // Church wi-fi drops; keep trying, but back off to 15s rather than
-    // hammering the worker from three screens at once.
     setTimeout(connect, backoff);
     backoff = Math.min(backoff * 2, 15000);
   }
-
   window.addEventListener("beforeunload", () => {
     closed = true;
     if (socket) try { socket.close(); } catch { /* already gone */ }
   });
-
   connect();
 })();
