@@ -360,8 +360,10 @@ wrong, fix the test and say so in the commit message.
    and a warning when the game fixture still holds placeholder content.
 2. **test** — importer unit tests and the Playwright suite.
 3. **lighthouse** — all four pages; accessibility asserted at 100.
-4. **deploy** — Cloudflare Pages, on `main` only.
-5. **deploy-worker** — the sync worker, on `main` only.
+
+The **deploy** and **deploy-worker** jobs were removed on 2026-10-01, when
+the Cloudflare deployment was shut down for good. Nothing deploys from CI now.
+Adding them back means setting the hosting up again from `docs/CLOUDFLARE.md`.
 
 Do not disable validation to make a failing change pass.
 
