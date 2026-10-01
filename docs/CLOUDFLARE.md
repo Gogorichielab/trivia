@@ -1,7 +1,13 @@
 # Cloudflare setup
 
-Everything below is **already deployed and working**. This document is the
-record of what exists, how to change it, and how to take it down afterwards.
+> **Shut down on 2026-10-01.** Everything in the table below was deleted on
+> purpose and for good: the Pages project, the Worker and its stored games,
+> the Worker's custom domain, the Access application, and both DNS records.
+> CI no longer deploys. The rest of this document is kept as the record of how
+> it was set up, in case the app is ever hosted again.
+
+This document is the record of what existed, how it was changed, and how it
+was taken down.
 
 | Thing | Where |
 | --- | --- |

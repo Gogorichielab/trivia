@@ -4,7 +4,7 @@ Trivia Night is a simple web app for running a live trivia game at any venue —
 
 The app gives the host one screen to run the game, an audience screen for questions and answers, and a scoreboard screen. It is built to work on ordinary laptops driving large TVs or projectors.
 
-A live instance runs at <https://trivia.gogorichie.online>.
+The hosted copy at `trivia.gogorichie.online` was shut down for good on 2026-10-01. The app still works when you open or serve the files yourself.
 
 ## What the app does
 
@@ -49,7 +49,7 @@ The project currently includes:
 - Cloudflare Access protection for the host page.
 - A host token that protects game-changing API requests.
 - Automated unit, browser, accessibility, and Lighthouse tests.
-- GitHub Actions for testing and deployment.
+- GitHub Actions for testing.
 - CodeQL security scanning and Dependabot updates.
 
 Short presentation transitions are included and turn off automatically when a
@@ -137,7 +137,7 @@ The app can work without Cloudflare sync. In that mode, each laptop uses its own
 
 ## Cross-laptop sync
 
-The deployed app uses a Cloudflare Worker and Durable Objects to share live
+The app can use a Cloudflare Worker and Durable Objects to share live
 game state between laptops. The saved state includes the current step, loaded
 game, teams, table numbers, round scores, adjustments, totals, and timer.
 

@@ -10,13 +10,10 @@ on:
 permissions:
   contents: read
 
-env:
-  # An identifier, not a credential -- it is already in docs/CLOUDFLARE.md.
-  # Keeping it here means CLOUDFLARE_API_TOKEN is the only secret to set up.
-  CLOUDFLARE_ACCOUNT_ID: 5ea902cfe05440351866b1a0f0535407
-
+# The Cloudflare deployment was shut down permanently, so this workflow
+# validates and tests only. It no longer deploys anything.
 concurrency:
-  group: deploy-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -153,92 +150,3 @@ jobs:
           path: .lighthouseci/
           retention-days: 7
 
-  deploy:
-    name: Deploy to Cloudflare Pages
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [validate, test, lighthouse]
-    runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: https://trivia.gogorichie.online
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      # Publish the app shell only. Anything published is world-readable, so
-      # question and answer data stays out of it: mock/ holds an answer key,
-      # and example.game.json would hold the real one. The host loads the
-      # game file from the laptop through the file picker.
-      - name: Assemble site
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf _site && mkdir -p _site
-          cp index.html host.html display.html scoreboard.html styles.css game.js import.js timer.js sync.js _site/
-          cp -r vendor _site/vendor
-          echo "Publishing:"
-          find _site -type f | sort
-
-      - name: Verify no answer data is being published
-        shell: bash
-        run: |
-          set -euo pipefail
-          if find _site \( -name '*.csv' -o -name '*.game.json' \) | grep -q .; then
-            echo "::error::Question or answer data found in the publish directory"
-            exit 1
-          fi
-          echo "No question or answer data in _site."
-
-      - name: Check deploy credentials are present
-        id: creds
-        shell: bash
-        env:
-          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          if [ -n "$TOKEN" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::CLOUDFLARE_API_TOKEN is not set; skipping deploy. See docs/CLOUDFLARE.md."
-          fi
-
-      - name: Deploy to Cloudflare Pages
-        if: steps.creds.outputs.ready == 'true'
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy _site --project-name=trivia --branch=main
-
-  deploy-worker:
-    name: Deploy sync worker
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [validate, test]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Check deploy credentials are present
-        id: creds
-        shell: bash
-        env:
-          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          if [ -n "$TOKEN" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::CLOUDFLARE_API_TOKEN is not set; skipping worker deploy."
-          fi
-
-      # HOST_TOKEN is a secret set with `wrangler secret put`, not in the repo.
-      # Redeploying the worker does not clear it.
-      - name: Deploy worker
-        if: steps.creds.outputs.ready == 'true'
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: worker
-          command: deploy
